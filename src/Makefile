@@ -353,7 +353,7 @@ CClink = $(CC)
 #CONF_OPT_GUI = --enable-gui=gtk2 --disable-gtktest
 #CONF_OPT_GUI = --enable-gui=gnome2
 #CONF_OPT_GUI = --enable-gui=gnome2 --disable-gtktest
-#CONF_OPT_GUI = --enable-gui=gtk3
+CONF_OPT_GUI = --enable-gui=gtk3
 #CONF_OPT_GUI = --enable-gui=gtk3 --disable-gtktest
 #CONF_OPT_GUI = --enable-gui=motif
 #CONF_OPT_GUI = --enable-gui=motif --with-motif-lib="-static -lXm -shared"
@@ -419,7 +419,7 @@ CClink = $(CC)
 # one: "touch perl.exp".
 # This requires at least "normal" features, "tiny" doesn't work.
 #CONF_OPT_PERL = --enable-perlinterp
-#CONF_OPT_PERL = --enable-perlinterp=dynamic
+CONF_OPT_PERL = --enable-perlinterp=dynamic
 
 # PYTHON
 # Uncomment lines here when you want to include the Python interface.
@@ -440,7 +440,7 @@ CClink = $(CC)
 #CONF_OPT_PYTHON = --enable-pythoninterp=dynamic
 #CONF_OPT_PYTHON3 = --enable-python3interp
 #CONF_OPT_PYTHON3 = --enable-python3interp --with-python3-command=python3.6
-#CONF_OPT_PYTHON3 = --enable-python3interp=dynamic
+CONF_OPT_PYTHON3 = --enable-python3interp=dynamic
 
 # RUBY
 # Uncomment this when you want to include the Ruby interface.
@@ -448,7 +448,7 @@ CClink = $(CC)
 # Debian package is "ruby-dev".
 # This requires at least "normal" features, "tiny" doesn't work.
 #CONF_OPT_RUBY = --enable-rubyinterp
-#CONF_OPT_RUBY = --enable-rubyinterp=dynamic
+CONF_OPT_RUBY = --enable-rubyinterp=dynamic
 #CONF_OPT_RUBY = --enable-rubyinterp --with-ruby-command=ruby1.9.1
 
 # TCL
@@ -537,7 +537,7 @@ CClink = $(CC)
 #CONF_OPT_FEAT = --with-features=huge
 
 # COMPILED BY - For including a specific e-mail address for ":version".
-#CONF_OPT_COMPBY = "--with-compiledby=John Doe <JohnDoe@yahoo.com>"
+CONF_OPT_COMPBY = "--with-compiledby=hejohns <hejohns@umich.edu>"
 
 # X WINDOWS DISABLE - For creating a plain Vim without any X11 related fancies
 # (otherwise Vim configure will try to include xterm titlebar access)
@@ -589,6 +589,7 @@ CClink = $(CC)
 # When not defined, configure will try to use -O2 for gcc and -O for others.
 #CFLAGS = -g
 #CFLAGS = -O
+CFLAGS += -D_GNU_SOURCE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
 
 # Optimization limits - depends on the compiler.  Automatic check in configure
 # doesn't work very well, because many compilers only give a warning for
@@ -696,9 +697,9 @@ LINT_OPTIONS = -beprxzF
 # $ export ASAN_OPTIONS="print_stacktrace=1 log_path=asan"
 # $ export LSAN_OPTIONS="suppressions=`pwd`/testdir/lsan-suppress.txt"
 # When running tests output can be found in testdir/asan.*
-#SANITIZER_CFLAGS = -g -O0 -fsanitize-recover=all \
-#		   -fsanitize=address -fsanitize=undefined \
-#		   -fno-omit-frame-pointer
+SANITIZER_CFLAGS = -ggdb3 -Og -fsanitize-recover=all \
+		   -fsanitize=address,undefined \
+		   -fno-omit-frame-pointer
 
 # Similarly when compiling with clang and using ubsan.
 # $ export UBSAN_OPTIONS="print_stacktrace=1 log_path=ubsan"
