@@ -418,8 +418,8 @@ CONF_OPT_GUI = --enable-gui=gtk3
 # When you get an error for a missing "perl.exp" file, try creating an empty
 # one: "touch perl.exp".
 # This requires at least "normal" features, "tiny" doesn't work.
-#CONF_OPT_PERL = --enable-perlinterp
-CONF_OPT_PERL = --enable-perlinterp=dynamic
+CONF_OPT_PERL = --enable-perlinterp
+#CONF_OPT_PERL = --enable-perlinterp=dynamic
 
 # PYTHON
 # Uncomment lines here when you want to include the Python interface.
@@ -438,17 +438,17 @@ CONF_OPT_PERL = --enable-perlinterp=dynamic
 #CONF_OPT_PYTHON = --enable-pythoninterp
 #CONF_OPT_PYTHON = --enable-pythoninterp --with-python-command=python2.7
 #CONF_OPT_PYTHON = --enable-pythoninterp=dynamic
-#CONF_OPT_PYTHON3 = --enable-python3interp
+CONF_OPT_PYTHON3 = --enable-python3interp
 #CONF_OPT_PYTHON3 = --enable-python3interp --with-python3-command=python3.6
-CONF_OPT_PYTHON3 = --enable-python3interp=dynamic
+#CONF_OPT_PYTHON3 = --enable-python3interp=dynamic
 
 # RUBY
 # Uncomment this when you want to include the Ruby interface.
 # First one for static linking, second one for loading when used.
 # Debian package is "ruby-dev".
 # This requires at least "normal" features, "tiny" doesn't work.
-#CONF_OPT_RUBY = --enable-rubyinterp
-CONF_OPT_RUBY = --enable-rubyinterp=dynamic
+CONF_OPT_RUBY = --enable-rubyinterp
+#CONF_OPT_RUBY = --enable-rubyinterp=dynamic
 #CONF_OPT_RUBY = --enable-rubyinterp --with-ruby-command=ruby1.9.1
 
 # TCL
@@ -534,7 +534,7 @@ CONF_OPT_RUBY = --enable-rubyinterp=dynamic
 # The default is "huge" for most systems.
 #CONF_OPT_FEAT = --with-features=tiny
 #CONF_OPT_FEAT = --with-features=normal
-#CONF_OPT_FEAT = --with-features=huge
+CONF_OPT_FEAT = --with-features=huge
 
 # COMPILED BY - For including a specific e-mail address for ":version".
 CONF_OPT_COMPBY = "--with-compiledby=hejohns <hejohns@umich.edu>"
@@ -589,7 +589,7 @@ CONF_OPT_COMPBY = "--with-compiledby=hejohns <hejohns@umich.edu>"
 # When not defined, configure will try to use -O2 for gcc and -O for others.
 #CFLAGS = -g
 #CFLAGS = -O
-CFLAGS += -D_GNU_SOURCE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3
+CFLAGS += -D_GNU_SOURCE -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1
 
 # Optimization limits - depends on the compiler.  Automatic check in configure
 # doesn't work very well, because many compilers only give a warning for
@@ -697,8 +697,10 @@ LINT_OPTIONS = -beprxzF
 # $ export ASAN_OPTIONS="print_stacktrace=1 log_path=asan"
 # $ export LSAN_OPTIONS="suppressions=`pwd`/testdir/lsan-suppress.txt"
 # When running tests output can be found in testdir/asan.*
+
+# -fsanitize=address is too noisy and sometimes vim fails to startup
 SANITIZER_CFLAGS = -ggdb3 -Og -fsanitize-recover=all \
-		   -fsanitize=address,undefined \
+		   -fsanitize=undefined \
 		   -fno-omit-frame-pointer
 
 # Similarly when compiling with clang and using ubsan.
