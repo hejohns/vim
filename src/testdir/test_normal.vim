@@ -1342,6 +1342,22 @@ func Test_scroll_in_ex_mode()
   call delete('Xdone')
 endfunc
 
+func Test_scroll_and_paste_in_ex_mode()
+  " This used to crash because of moving cursor to line 0.
+  let lines =<< trim END
+      v/foo/vi|YY9PYQ
+      v/bar/vi|YY9PYQ
+      v/bar/exe line('.') == 1 ? "vi|Y\<C-B>9PYQ" : "vi|YQ"
+      call writefile(['done'], 'Xdone')
+      qa!
+  END
+  call writefile(lines, 'Xscript', 'D')
+  call assert_equal(1, RunVim([], [], '-u NONE -i NONE -n -X -Z -e -s -S Xscript'))
+  call assert_equal(['done'], readfile('Xdone'))
+
+  call delete('Xdone')
+endfunc
+
 " Test for the 'sidescroll' option
 func Test_sidescroll_opt()
   new
@@ -3948,8 +3964,7 @@ func Test_mouse_shape_after_failed_change()
   END
   call writefile(lines, 'Xmouseshape.vim', 'D')
   call RunVim([], [], "-g -S Xmouseshape.vim")
-  sleep 300m
-  call assert_equal(['busy', 'arrow'], readfile('Xmouseshapes'))
+  call WaitForAssert({-> assert_equal(['busy', 'arrow'], readfile('Xmouseshapes'))}, 300)
 
   call delete('Xmouseshapes')
 endfunc
@@ -3980,8 +3995,7 @@ func Test_mouse_shape_after_cancelling_gr()
   END
   call writefile(lines, 'Xmouseshape.vim', 'D')
   call RunVim([], [], "-g -S Xmouseshape.vim")
-  sleep 300m
-  call assert_equal(['beam', 'arrow'], readfile('Xmouseshapes'))
+  call WaitForAssert({-> assert_equal(['beam', 'arrow'], readfile('Xmouseshapes'))}, 300)
 
   call delete('Xmouseshapes')
 endfunc
@@ -4266,6 +4280,7 @@ endfunc
 " Test for Ctrl-D with long line
 func Test_halfpage_longline()
   10new
+  40vsplit
   call setline(1, ['long'->repeat(1000), 'short'])
   exe "norm! \<C-D>"
   call assert_equal(2, line('.'))
@@ -4273,7 +4288,7 @@ func Test_halfpage_longline()
 endfunc
 
 " Test for Ctrl-E with long line and very narrow window,
-" used to cause an inifite loop
+" used to cause an infinite loop
 func Test_scroll_longline_no_loop()
   4vnew
   setl smoothscroll number showbreak=> scrolloff=2
@@ -4281,4 +4296,18 @@ func Test_scroll_longline_no_loop()
   exe "normal! \<C-E>"
   bwipe!
 endfunc
+
+" Test for go command
+func Test_normal_go()
+  new
+  call setline(1, ['one two three four'])
+  call cursor(1, 5)
+  norm! dvgo
+  call assert_equal('wo three four', getline(1))
+  norm! ...
+  call assert_equal('three four', getline(1))
+
+  bwipe!
+endfunc
+
 " vim: shiftwidth=2 sts=2 expandtab nofoldenable

@@ -513,6 +513,8 @@ EXTERN char_u	*p_cpt;		// 'complete'
 EXTERN int	p_confirm;	// 'confirm'
 #endif
 EXTERN int	p_cp;		// 'compatible'
+EXTERN char_u	*p_cia;		// 'completeitemalign'
+EXTERN unsigned cia_flags;	// order flags of 'completeitemalign'
 EXTERN char_u	*p_cot;		// 'completeopt'
 EXTERN unsigned	cot_flags;	// flags from 'completeopt'
 // Keep in sync with p_cot_values in optionstr.c
@@ -528,6 +530,7 @@ EXTERN unsigned	cot_flags;	// flags from 'completeopt'
 #define COT_NOINSERT	    0x040   // FALSE: select & insert, TRUE: noinsert
 #define COT_NOSELECT	    0x080   // FALSE: select & insert, TRUE: noselect
 #define COT_FUZZY	    0x100   // TRUE: fuzzy match enabled
+#define COT_NOSORT	    0x200   // TRUE: fuzzy match without qsort score
 #ifdef BACKSLASH_IN_FILENAME
 EXTERN char_u	*p_csl;		// 'completeslash'
 #endif
@@ -594,6 +597,9 @@ EXTERN char_u	*p_ffs;		// 'fileformats'
 EXTERN int	p_fic;		// 'fileignorecase'
 EXTERN char_u	*p_ft;		// 'filetype'
 EXTERN char_u	*p_fcs;		// 'fillchar'
+#ifdef FEAT_EVAL
+EXTERN char_u	*p_ffu;		// 'findfunc'
+#endif
 EXTERN int	p_fixeol;	// 'fixendofline'
 #ifdef FEAT_FOLDING
 EXTERN char_u	*p_fcl;		// 'foldclose'
@@ -770,6 +776,7 @@ EXTERN long	p_mmt;		// 'maxmemtot'
 #ifdef FEAT_MENU
 EXTERN long	p_mis;		// 'menuitems'
 #endif
+EXTERN char_u	*p_mopt;	// 'messagesopt'
 #ifdef FEAT_SPELL
 EXTERN char_u	*p_msm;		// 'mkspellmem'
 #endif
@@ -1170,6 +1177,7 @@ enum
 #ifdef FEAT_EVAL
     , BV_BEXPR
     , BV_FEX
+    , BV_FFU
 #endif
     , BV_FF
     , BV_FLP

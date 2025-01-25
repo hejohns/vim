@@ -357,6 +357,16 @@ def Test_blob2list()
   v9.CheckSourceDefAndScriptFailure(['blob2list(10)'], ['E1013: Argument 1: type mismatch, expected blob but got number', 'E1238: Blob required for argument 1'])
 enddef
 
+def Test_blob2str()
+  0z6162->blob2str()->assert_equal(["ab"])
+  blob2str(0z)->assert_equal([])
+
+  var l: list<string> = blob2str(0zC2ABC2BB)
+  assert_equal(["«»"], l)
+
+  v9.CheckSourceDefAndScriptFailure(['blob2str("ab")'], ['E1013: Argument 1: type mismatch, expected blob but got string', 'E1238: Blob required for argument 1'])
+enddef
+
 def Test_browse()
   CheckFeature browse
 
@@ -495,6 +505,56 @@ def Test_call_call()
   v9.CheckSourceDefExecAndScriptFailure(['call(true, [2])'], 'E1256: String or function required for argument 1')
   v9.CheckSourceDefAndScriptFailure(['call("reverse", 2)'], ['E1013: Argument 2: type mismatch, expected list<any> but got number', 'E1211: List required for argument 2'])
   v9.CheckSourceDefAndScriptFailure(['call("reverse", [2], [1])'], ['E1013: Argument 3: type mismatch, expected dict<any> but got list<number>', 'E1206: Dictionary required for argument 3'])
+enddef
+
+def Test_call_imports()
+  # Use call with an imported function
+  var lines =<< trim END
+    vim9script
+
+    export const foo = 'foo'
+
+    export def Imported()
+    enddef
+
+    var count: number
+    export def ImportedListArg(l: list<number>)
+      count += 1
+      l[0] += count
+    enddef
+  END
+  writefile(lines, 'Test_call_imports_importme', 'D')
+  lines =<< trim END
+    vim9script
+    import './Test_call_imports_importme' as i_imp
+
+    var l = [12]
+    call('i_imp.ImportedListArg', [l])
+    assert_equal(13, l[0])
+    const ImportedListArg = i_imp.ImportedListArg
+    call('ImportedListArg', [l])
+    assert_equal(15, l[0])
+    const Imported = i_imp.Imported
+    call("Imported", [])
+
+    assert_equal('foo', i_imp.foo)
+    const foo = i_imp.foo
+    assert_equal('foo', foo)
+  END
+  v9.CheckSourceScriptSuccess(lines)
+
+  # A few error cases
+  lines =<< trim END
+    vim9script
+    import './Test_call_imports_importme' as i_imp
+    const Imported = i_imp.Imported
+    const foo = i_imp.foo
+
+    assert_fails('call("i_imp.foo", [])', ['E46:', 'E117:']) # foo is not a function
+    assert_fails('call("foo", [])', 'E117:') # foo is not a function
+    assert_fails('call("i_xxx.foo", [])', 'E117:') # i_xxx not imported file
+  END
+  v9.CheckSourceScriptSuccess(lines)
 enddef
 
 def Test_ch_canread()
@@ -913,6 +973,18 @@ enddef
 def Test_digraph_getlist()
   v9.CheckSourceDefAndScriptFailure(['digraph_getlist(10)'], ['E1013: Argument 1: type mismatch, expected bool but got number', 'E1212: Bool required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['digraph_getlist("")'], ['E1013: Argument 1: type mismatch, expected bool but got string', 'E1212: Bool required for argument 1'])
+
+  var lines =<< trim END
+    var l = digraph_getlist(true)
+    assert_notequal([], l)
+    l = digraph_getlist(false)
+    assert_equal([], l)
+    l = digraph_getlist(1)
+    assert_notequal([], l)
+    l = digraph_getlist(0)
+    assert_equal([], l)
+  END
+  v9.CheckSourceDefAndScriptSuccess(lines)
 enddef
 
 def Test_digraph_set()
@@ -4261,6 +4333,13 @@ enddef
 def Test_state()
   v9.CheckSourceDefAndScriptFailure(['state({})'], ['E1013: Argument 1: type mismatch, expected string but got dict<any>', 'E1174: String required for argument 1'])
   assert_equal('', state('a'))
+enddef
+
+def Test_str2blob()
+  ["ab"]->str2blob()->assert_equal(0z6162)
+  str2blob([""])->assert_equal(0z)
+
+  v9.CheckSourceDefAndScriptFailure(['str2blob("ab")'], ['E1013: Argument 1: type mismatch, expected list<string> but got string', 'E1211: List required for argument 1'])
 enddef
 
 def Test_str2float()

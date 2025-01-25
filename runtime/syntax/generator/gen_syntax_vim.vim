@@ -1,16 +1,15 @@
 " Vim syntax file generator
 " Language: Vim script
 " Maintainer: Hirohito Higashi (h_east)
-" URL: https://github.com/vim-jp/syntax-vim-ex
-" Last Change: 2024 Jul 18
-" Version: 2.1.1
+" Last Change: 2024 Dec 29
 
 let s:keepcpo= &cpo
 set cpo&vim
 
 language C
+let s:log_write_dir = getcwd() . '/'
 
-function! s:parse_vim_option(opt, missing_opt, term_out_code)
+function s:parse_vim_option(opt, missing_opt, term_out_code)
 	try
 		let file_name = $VIM_SRCDIR . '/optiondefs.h'
 		let item = {}
@@ -67,7 +66,7 @@ function! s:parse_vim_option(opt, missing_opt, term_out_code)
 	endtry
 endfunc
 
-function! s:append_syn_vimopt(lnum, str_info, opt_list, prefix, bool_only)
+function s:append_syn_vimopt(lnum, str_info, opt_list, prefix, bool_only)
 	let ret_lnum = a:lnum
 	let str = a:str_info.start
 
@@ -98,7 +97,7 @@ function! s:append_syn_vimopt(lnum, str_info, opt_list, prefix, bool_only)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:parse_vim_command(cmd)
+function s:parse_vim_command(cmd)
 	try
 		let file_name = $VIM_SRCDIR . '/ex_cmds.h'
 		let item = {}
@@ -133,41 +132,25 @@ function! s:parse_vim_command(cmd)
 				if my > 0
 					let omit_idx = (key =~# '\l') ? 1 : 0
 					for idx in range(1, strlen(lcmd[key][my]))
-            let spec=0
-            if lcmd[key][my] ==# 'ex'
-              let spec=1
-              echo "cmd name:" lcmd[key][my]
-            endif
 						let matched = 0
 						for pre in range(my - 1, 0, -1)
-              if spec
-                echo "pre:" pre ", my:" my
-              endif
-							if pre == my
-                if spec
-                  echo "continue"
-                endif
-								continue
-							endif
-							" for weird abbreviations for delete. (See :help :d)
-							" And k{char} is used as mark. (See :help :k)
+							" Avoiding conflicts shortened command and special commands
+							" - weird abbreviations for delete. (See :help :d)
+							" - k{char} is used as mark. (See :help :k)
+							" - :s commsnds repeat. (See :help :substitute-repeat)
 							if lcmd[key][my][:idx] ==# lcmd[key][pre][:idx] ||
 							\	(key ==# 'd' &&
 							\		lcmd[key][my][:idx] =~# '^d\%[elete][lp]$')
 							\	|| (key ==# 'k' &&
 							\		lcmd[key][my][:idx] =~# '^k[a-zA-Z]$')
+							\	|| (key ==# 's' &&
+							\		lcmd[key][my][:idx] =~# '^s\%(c\%([^sr][^ip]\=\)\=$\|g\|i[^mlg]\=$\|I\|r[^e]\=$\)')
 								let matched = 1
 								let omit_idx = idx + 1
-                if spec
-                  echo "match. break. omit_idx:" omit_idx
-                endif
 								break
 							endif
 						endfor
 						if !matched
-              if spec
-                echo "not match. break"
-              endif
 							break
 						endif
 					endfor
@@ -186,46 +169,6 @@ function! s:parse_vim_command(cmd)
 				call add(a:cmd, copy(item))
 			endfor
 		endfor
-
-		" Check exists in the help. (Usually it does not check...)
-		let doc_dir = './vim/runtime/doc'
-		if 0
-			for vimcmd in a:cmd
-				let find_ptn = '^|:' . vimcmd.name . '|\s\+'
-				exec "silent! vimgrep /" . find_ptn . "/gj " . doc_dir . "/index.txt"
-				let li = getqflist()
-				if empty(li)
-					call s:err_sanity(printf('Ex-cmd `:%s` is not found in doc/index.txt.', vimcmd.name))
-				elseif len(li) > 1
-					call s:err_sanity(printf('Ex-cmd `:%s` is duplicated in doc/index.txt.', vimcmd.name))
-				else
-					let doc_syn_str = substitute(li[0].text, find_ptn . '\(\S\+\)\s\+.*', '\1', '')
-					if doc_syn_str ==# vimcmd.syn_str
-						call s:err_sanity(printf('Ex-cmd `%s` short name differ in doc/index.txt. code: `%s`, document: `%s`', vimcmd.name, vimcmd.syn_str, doc_syn_str))
-					endif
-				endif
-
-				if 1
-				for i in range(2)
-					if i || vimcmd.omit_idx >= 0
-						if !i
-							let base_ptn = vimcmd.name[:vimcmd.omit_idx]
-						else
-							let base_ptn = vimcmd.name
-						endif
-						let find_ptn = '\*:' . base_ptn . '\*'
-						exec "silent! vimgrep /" . find_ptn . "/gj " . doc_dir . "/*.txt"
-						let li = getqflist()
-						if empty(li)
-							call s:err_sanity(printf('Ex-cmd `:%s`%s is not found in the help tag.', base_ptn, !i ? ' (short name of `:' . vimcmd.name . '`)' : ''))
-						elseif len(li) > 1
-							call s:err_sanity(printf('Ex-cmd `:%s`%s is duplicated in the help tag.', base_ptn, !i ? ' (short name of `:' . vimcmd.name . '`)' : ''))
-						endif
-					endif
-				endfor
-			endif
-			endfor
-		endif
 
 		" Add weird abbreviations for delete. (See :help :d)
 		for i in ['l', 'p']
@@ -251,6 +194,37 @@ function! s:parse_vim_command(cmd)
 		let item.syn_str = item.name
 		call add(a:cmd, copy(item))
 
+		let no_shorten_in_vim9 =<< trim EOL
+			final
+			def
+			enddef
+			class
+			endclass
+			enum
+			endenum
+			interface
+			endinterface
+			abstract
+			public
+			static
+			this
+			var
+			type
+		EOL
+
+		call map(a:cmd, {_, v ->
+			\ index(no_shorten_in_vim9, v.name) != -1 ?
+			\		extend(copy(v), {'omit_idx': -1, 'syn_str': v.name}) :
+			"\ ":fina" means ":finally" in legacy script, for backwards compatibility.
+			"\ (From Vim source code find_ex_command() in ex_docmd.c)
+			\ v.name ==# 'finally' ?
+			\		extend(copy(v), {'omit_idx': 3, 'syn_str': 'fina[lly]'}) :
+			"\ :ho must not be recognized as :horizontal.
+			\ v.name ==# 'horizontal' ?
+			\		extend(copy(v), {'omit_idx': 2, 'syn_str': 'hor[izontal]'}) :
+			\ v
+			\ })
+
 		if empty(a:cmd)
 			throw 'cmd is empty'
 		endif
@@ -260,7 +234,7 @@ function! s:parse_vim_command(cmd)
 	endtry
 endfunc
 
-function! s:get_vim_command_type(cmd_name)
+function s:get_vim_command_type(cmd_name)
 	" Return value:
 	"   0: normal
 	"   1: (Reserved)
@@ -280,6 +254,7 @@ function! s:get_vim_command_type(cmd_name)
 		Next
 		Print
 		X
+		abstract
 		append
 		augroup
 		augroup
@@ -287,7 +262,9 @@ function! s:get_vim_command_type(cmd_name)
 		behave
 		call
 		catch
+		class
 		def
+		delcommand
 		doautoall
 		doautocmd
 		echo
@@ -297,14 +274,23 @@ function! s:get_vim_command_type(cmd_name)
 		echomsg
 		echon
 		echowindow
+		elseif
+		endclass
 		enddef
+		endenum
 		endfunction
+		endinterface
+		enum
 		execute
+		export
 		final
 		for
 		function
+		if
+		interface
 		insert
 		let
+		loadkeymap
 		map
 		mapclear
 		match
@@ -312,19 +298,25 @@ function! s:get_vim_command_type(cmd_name)
 		new
 		normal
 		popup
+		public
+		return
 		set
 		setglobal
 		setlocal
 		sleep
 		smagic
 		snomagic
+		static
 		substitute
 		syntax
+		this
 		throw
+		type
 		unlet
 		unmap
 		var
 		vim9script
+		while
 	EOL
 	" Required for original behavior
 	" \	'global', 'vglobal'
@@ -349,7 +341,7 @@ function! s:get_vim_command_type(cmd_name)
 	return ret
 endfunc
 
-function! s:append_syn_vimcmd(lnum, str_info, cmd_list, type)
+function s:append_syn_vimcmd(lnum, str_info, cmd_list, type)
 	let ret_lnum = a:lnum
 	let str = a:str_info.start
 
@@ -377,7 +369,7 @@ function! s:append_syn_vimcmd(lnum, str_info, cmd_list, type)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:parse_vim_event(li)
+function s:parse_vim_event(li)
 	try
 		let file_name = $VIM_SRCDIR . '/autocmd.c'
 		let item = {}
@@ -409,7 +401,7 @@ function! s:parse_vim_event(li)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:parse_vim_function(li)
+function s:parse_vim_function(li)
 	try
 		let file_name = $VIM_SRCDIR . '/evalfunc.c'
 		let item = {}
@@ -444,7 +436,7 @@ function! s:parse_vim_function(li)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:parse_vim_hlgroup(li)
+function s:parse_vim_hlgroup(li)
 	try
 		let file_name = $VIM_SRCDIR . '/highlight.c'
 		let item = {}
@@ -518,7 +510,7 @@ function! s:parse_vim_hlgroup(li)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:parse_vim_complete_name(li)
+function s:parse_vim_complete_name(li)
 	try
 		let file_name = $VIM_SRCDIR . '/usercmd.c'
 		let item = {}
@@ -526,15 +518,15 @@ function! s:parse_vim_complete_name(li)
 		new
 		exec 'read ' . file_name
 		norm! gg
-		exec '/^}\s*command_complete\[\]\s*=\s*$/+1;/^};/-1yank'
+		exec '/^static keyvalue_T command_complete_tab\[] =$/+1;/^};$/-1yank'
 		%delete _
 
 		put
-		g!/^\s*{.*"\w\+"\s*}\s*,.*$/d
+		g!/^\s*KEYVALUE_ENTRY(/d
 		g/"custom\(list\)\?"/d
 
 		for line in getline(1, line('$'))
-			let list = matchlist(line, '^\s*{.*"\(\w\+\)"\s*}\s*,')
+			let list = matchlist(line, '^\s*KEYVALUE_ENTRY(EXPAND_\w\+,\s*"\(\w\+\)"')
 			let item.name = list[1]
 			call add(a:li, copy(item))
 		endfor
@@ -551,7 +543,45 @@ function! s:parse_vim_complete_name(li)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:append_syn_any(lnum, str_info, li)
+function s:parse_vim_addr_name(li)
+	try
+		let file_name = $VIM_SRCDIR . '/usercmd.c'
+		let item = {}
+
+		new
+		exec 'read ' . file_name
+		norm! gg
+		exec '/^static addrtype_T addr_type_complete_tab\[] =$/+1;/^};$/-1yank'
+		%delete _
+
+		put
+		g!/^\s*ADDRTYPE_ENTRY(/d
+
+		for line in getline(1, line('$'))
+			let list = matchlist(line, '^\s*ADDRTYPE_ENTRY(ADDR_\w\+,\s*"\(\w\+\)",\s*"\(.*\)"')
+			let item.name = list[1]
+			call add(a:li, copy(item))
+			let item.name = list[2]
+			call add(a:li, copy(item))
+		endfor
+
+		" '?' is not in 'iskeyword' and cannot be used as keyword, so remove it.
+		" (Separately specified as 'syn match' in vim.vim.base).
+		call filter(a:li, {idx, val -> val.name !=# '?'})
+
+		quit!
+
+		if empty(a:li)
+			throw 'addr_name is empty'
+		endif
+	catch /.*/
+		call s:err_gen('')
+		throw 'exit'
+	endtry
+endfunc
+
+" ------------------------------------------------------------------------------
+function s:append_syn_any(lnum, str_info, li)
 	let ret_lnum = a:lnum
 	let str = a:str_info.start
 
@@ -576,7 +606,8 @@ function! s:append_syn_any(lnum, str_info, li)
 	return ret_lnum
 endfunc
 
-function! s:update_syntax_vim_file(vim_info)
+" ------------------------------------------------------------------------------
+function s:update_syntax_vim_file(vim_info)
 	try
 		function! s:search_and_check(kword, base_fname, str_info)
 			let a:str_info.start = ''
@@ -657,7 +688,12 @@ function! s:update_syntax_vim_file(vim_info)
 
 		" vimUserAttrbCmplt
 		let li = a:vim_info.compl_name
-		let lnum = s:search_and_check('vimUserAttrbCmplt', base_fname, str_info)
+		let lnum = s:search_and_check('vimUserCmdAttrCmplt', base_fname, str_info)
+		let lnum = s:append_syn_any(lnum, str_info, li)
+
+		" vimUserAttrbAddr
+		let li = a:vim_info.addr_name
+		let lnum = s:search_and_check('vimUserCmdAttrAddr', base_fname, str_info)
 		let lnum = s:append_syn_any(lnum, str_info, li)
 
 		" vimCommand - abbrev
@@ -688,15 +724,121 @@ function! s:update_syntax_vim_file(vim_info)
 endfunc
 
 " ------------------------------------------------------------------------------
-function! s:err_gen(arg)
-	call s:write_error(a:arg, 'generator.err')
+function s:check_help_doc(vim_info)
+	try
+		new
+		let cwd_save = getcwd()
+		cd ../../../runtime/doc
+
+		let exclude_cmd =<< trim END
+			deletel
+			deletep
+			a
+			i
+		END
+
+		let nocheck_shorten_excmd_list =<< trim END
+			bufdo
+			cfdo
+			cstag
+			debug
+			defer
+			eval
+			intro
+			lfdo
+			luado
+			luafile
+			ownsyntax
+			py3do
+			pydo
+			pyxdo
+			pyxfile
+			rundo
+			smile
+			syntime
+			windo
+			wundo
+		END
+
+		" Check the Ex-command is listed in index.txt
+		split index.txt
+		for vimcmd in a:vim_info.cmd
+			if index(exclude_cmd, vimcmd.name) != -1
+				continue
+			endif
+			norm! gg
+			let find_ptn = '^|:' . vimcmd.name . '|\s\+'
+			let lnum = search(find_ptn, 'eW')
+			if lnum == 0
+				call s:err_sanity($'Ex-cmd ":{vimcmd.name}" is not found in index.txt.')
+			elseif search(find_ptn, 'eW') > 0
+				call s:err_sanity($'Ex-cmd ":{vimcmd.name}" is duplicated in index.txt.')
+			else
+				let doc_syn_str = substitute(getline(lnum), find_ptn . ':\(\S\+\)\s\+.*', '\1', '')
+				if doc_syn_str !=# vimcmd.syn_str
+					call s:err_sanity($'Ex-cmd "{vimcmd.name}" short name differ in index.txt. expect: "{vimcmd.syn_str}", but: "{doc_syn_str}"')
+				endif
+			endif
+		endfor
+		quit!
+
+		" Check the existence of the help tag for Ex-command.
+		set wildignore=version*.txt,todo.txt,usr_*.txt
+		for vimcmd in a:vim_info.cmd
+			if index(exclude_cmd, vimcmd.name) != -1
+				continue
+			endif
+			let find_ptn = '\s\*:' . vimcmd.name . '\*\_s'
+			exec "silent! vimgrep /" . find_ptn . "/gj *.txt"
+			let qfl = getqflist()
+			if empty(qfl)
+				call s:err_sanity($'Help tag for Ex-cmd ":{vimcmd.name}" not found.')
+			elseif len(qfl) > 1
+				call s:err_sanity($'Help tag for Ex-cmd ":{vimcmd.name}" is duplicated.')
+			elseif index(nocheck_shorten_excmd_list, vimcmd.name) ==# -1
+				" Check the existence of the shorten Ex-command notation.
+				cc
+				norm! 2k
+				let end_lnum = qfl[0].lnum + 10
+				let find_ptn = '^:.*\<' . vimcmd.syn_str->escape('[]')
+				let lnum = search(find_ptn, 'W', end_lnum)
+				if lnum == 0
+					if vimcmd.omit_idx != -1
+						" Check the existence of the shorten help tag for Ex-command.
+						cc
+						norm! k
+						let end_lnum = qfl[0].lnum + 10
+						let find_ptn = '\s\*:' . vimcmd.name[:vimcmd.omit_idx] . '\*\_s'
+						let lnum = search(find_ptn, 'W', end_lnum)
+					else
+						let lnum = 1
+					endif
+					if lnum == 0
+						call s:err_sanity($'Shorten help tag "{vimcmd.name[:vimcmd.omit_idx]}" for Ex-cmd "{vimcmd.name}" not found.')
+					endif
+				endif
+			endif
+		endfor
+	catch /.*/
+		call s:err_gen('')
+		throw 'exit'
+	finally
+		call s:err_gen('Ex-cmd documentation consistency check completed.')
+		exec 'cd ' . cwd_save
+		set wildignore&
+	endtry
 endfunc
 
-function! s:err_sanity(arg)
-	call s:write_error(a:arg, 'sanity_check.err')
+" ------------------------------------------------------------------------------
+function s:err_gen(arg)
+	call s:write_error(a:arg, s:log_write_dir .. 'generator.err')
 endfunc
 
-function! s:write_error(arg, fname)
+function s:err_sanity(arg)
+	call s:write_error(a:arg, s:log_write_dir .. 'sanity_check.err')
+endfunc
+
+function s:write_error(arg, fname)
 	let li = []
 	if !empty(v:throwpoint)
 		call add(li, v:throwpoint)
@@ -730,17 +872,24 @@ try
 	let s:vim_info.func = []
 	let s:vim_info.hlgroup = []
 	let s:vim_info.compl_name = []
+	let s:vim_info.addr_name = []
 
 	set lazyredraw
-	silent call s:parse_vim_option(s:vim_info.opt, s:vim_info.missing_opt,
-	\						s:vim_info.term_out_code)
-	silent call s:parse_vim_command(s:vim_info.cmd)
-	silent call s:parse_vim_event(s:vim_info.event)
-	silent call s:parse_vim_function(s:vim_info.func)
-	silent call s:parse_vim_hlgroup(s:vim_info.hlgroup)
-	silent call s:parse_vim_complete_name(s:vim_info.compl_name)
+	if !$CHECK_HELP_DOC
+		silent call s:parse_vim_option(s:vim_info.opt, s:vim_info.missing_opt,
+		\						s:vim_info.term_out_code)
+		silent call s:parse_vim_command(s:vim_info.cmd)
+		silent call s:parse_vim_event(s:vim_info.event)
+		silent call s:parse_vim_function(s:vim_info.func)
+		silent call s:parse_vim_hlgroup(s:vim_info.hlgroup)
+		silent call s:parse_vim_complete_name(s:vim_info.compl_name)
+		silent call s:parse_vim_addr_name(s:vim_info.addr_name)
 
-	call s:update_syntax_vim_file(s:vim_info)
+		call s:update_syntax_vim_file(s:vim_info)
+	else
+		silent call s:parse_vim_command(s:vim_info.cmd)
+		silent call s:check_help_doc(s:vim_info)
+	endif
 	set nolazyredraw
 
 finally

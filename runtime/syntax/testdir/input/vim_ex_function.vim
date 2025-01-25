@@ -163,6 +163,11 @@ function Foo(
   return 42
 endfunction
 
+" Issue #16243 (vimscript def parameters syntax highlight is wrong)
+
+function Test(lines = [line('.'), line('.')])
+endfunction
+
 
 " comments
 
@@ -170,6 +175,18 @@ function Foo()
   " Legacy-script comment
   # 42 " comment
   return 42
+endfunction
+
+
+" command modifiers
+
+silent! function Foo()
+endfunction
+
+
+" leading command separator
+
+echo "Foo" | function Foo()
 endfunction
 
 

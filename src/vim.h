@@ -844,6 +844,8 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define EXPAND_TERMINALOPT	57
 #define EXPAND_KEYMAP		58
 #define EXPAND_DIRS_IN_CDPATH	59
+#define EXPAND_SHELLCMDLINE	60
+#define EXPAND_FINDFUNC		61
 
 
 // Values for exmode_active (0 is no exmode)
@@ -1012,9 +1014,10 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define KEY_COMPLETE	0x103	// end of completion
 
 // Used for the first argument of do_map()
-#define MAPTYPE_MAP	0
-#define MAPTYPE_UNMAP	1
-#define MAPTYPE_NOREMAP	2
+#define MAPTYPE_MAP		0
+#define MAPTYPE_UNMAP		1
+#define MAPTYPE_NOREMAP		2
+#define MAPTYPE_UNMAP_LHS	3
 
 // Values for "noremap" argument of ins_typebuf().  Also used for
 // map->m_noremap and menu->noremap[].
@@ -1622,6 +1625,7 @@ typedef UINT32_TYPEDEF UINT32_T;
  */
 #define MIN_COLUMNS	12	// minimal columns for screen
 #define MIN_LINES	2	// minimal lines for screen
+#define MIN_CMDHEIGHT	1	// minimal height for command line
 #define STATUS_HEIGHT	1	// height of a status line under a window
 #ifdef FEAT_MENU		// height of a status line under a window
 # define WINBAR_HEIGHT(wp)	(wp)->w_winbar_height
@@ -1769,6 +1773,7 @@ void *vim_memset(void *, int, size_t);
 
 # define MB_STRICMP(d, s)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)MAXCOL)
 # define MB_STRNICMP(d, s, n)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)(n))
+# define MB_STRNICMP2(d, s, n1, n2)	mb_strnicmp2((char_u *)(d), (char_u *)(s), (n1), (n2))
 
 #define STRCAT(d, s)	    strcat((char *)(d), (char *)(s))
 #define STRNCAT(d, s, n)    strncat((char *)(d), (char *)(s), (size_t)(n))
@@ -1987,6 +1992,7 @@ typedef int sock_T;
 // Note that gui.h is included by structs.h
 
 #include "structs.h"	// defines many structures
+#include "xdiff/xdiff.h"	// TODO: maybe remove this, but this brings in mmfile_t so it can compile
 
 #include "alloc.h"
 
@@ -2185,7 +2191,8 @@ typedef int sock_T;
 #define VV_TYPE_TYPEALIAS 107
 #define VV_TYPE_ENUM	  108
 #define VV_TYPE_ENUMVALUE 109
-#define VV_LEN		110	// number of v: vars
+#define VV_STACKTRACE	110
+#define VV_LEN		111	// number of v: vars
 
 // used for v_number in VAR_BOOL and VAR_SPECIAL
 #define VVAL_FALSE	0L	// VAR_BOOL
@@ -2370,6 +2377,17 @@ typedef enum {
     FCERR_NOTMETHOD,	// function cannot be used as a method
     FCERR_FAILED,	// error while executing the function
 } funcerror_T;
+
+/*
+ * Array indexes used for cp_text[].
+ */
+typedef enum {
+    CPT_ABBR,		// "abbr"
+    CPT_KIND,		// "kind"
+    CPT_MENU,		// "menu"
+    CPT_INFO,		// "info"
+    CPT_COUNT,		// Number of entries
+} cpitem_T;
 
 /*
  * Type for the callback function that is invoked after an option value is

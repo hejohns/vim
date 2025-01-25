@@ -89,6 +89,7 @@ void last_status(int morewin);
 int tabline_height(void);
 int last_stl_height(int morewin);
 int min_rows(void);
+int min_rows_for_all_tabpages(void);
 int only_one_window(void);
 void check_lnums(int do_curwin);
 void check_lnums_nested(int do_curwin);
@@ -98,6 +99,7 @@ void restore_snapshot(int idx, int close_curwin);
 int win_hasvertsplit(void);
 int get_win_number(win_T *wp, win_T *first_win);
 int get_tab_number(tabpage_T *tp);
-char *check_colorcolumn(win_T *wp);
+char *check_colorcolumn(char_u *cc, win_T *wp);
 int get_last_winid(void);
+int win_locked(win_T *wp);
 /* vim: set ft=c : */

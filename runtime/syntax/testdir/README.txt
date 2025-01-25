@@ -63,12 +63,40 @@ script file will be sourced before any VIM_TEST_SETUP commands are executed.
 
 Every line of a source file must not be longer than 1425 (19 x 75) characters.
 
-If there is no further setup required, you can now run the tests:
+If there is no further setup required, you can now run all tests:
 
 	make test
 
-The first time this will fail with an error for a missing screendump.  The
-newly created screendumps will be "failed/java_00.dump",
+Or you can run the tests for a filetype only by passing its file extension as
+another target, e.g. "java", before "test":
+
+	make java test
+
+Or you can run a test or two by passing their filenames as extra targets, e.g.
+"java_string.java" and "java_numbers.java", before "test", after listing all
+available syntax tests for Java:
+
+	ls testdir/input/java*
+	make java_string.java java_numbers.java test
+
+(Some interactive shells may attempt to perform word completion on arbitrary
+command arguments when you press certain keys, e.g. Tab or Ctrl-i.)
+
+As an alternative, you can specify a subset of test filenames for running as
+a regular expression and assign it to a VIM_SYNTAX_TEST_FILTER environment
+variable; e.g. to run all tests whose base names contain "fold", use any of:
+
+	make test -e 'VIM_SYNTAX_TEST_FILTER = fold.*\..\+'
+	make test VIM_SYNTAX_TEST_FILTER='fold.*\..\+'
+	VIM_SYNTAX_TEST_FILTER='fold.*\..\+' make test
+
+Consider quoting the variable value to avoid any interpretation by the shell.
+
+Both Make targets and the variable may be used at the same time, the target
+names will be tried for matching before the variable value.
+
+The first time testing "input/java.java" will fail with an error for a missing
+screendump.  The newly created screendumps will be "failed/java_00.dump",
 "failed/java_01.dump", etc.  You can inspect each with:
 
 	call term_dumpload('failed/java_00.dump')
@@ -124,7 +152,89 @@ verify that the tests fail.  Then you know your changes are covered by the
 test.
 
 
+Viewing generated screendumps (local)
+-------------------------------------
+
+You may also wish to look at the whole batch of failed screendumps after
+running "make test".  Source the "viewdumps.vim" script for this task:
+
+	[VIMRUNTIME=../..] \
+	../../src/vim --clean -S testdir/viewdumps.vim \
+				[testdir/dumps/java_*.dump ...]
+
+By default, all screendumps found in the "failed" directory will be added to
+the argument list and then the first one will be loaded.  Loaded screendumps
+that bear filenames of screendumps found in the "dumps" directory will be
+rendering the contents of any such pair of files and the difference between
+them (:help term_dumpdiff()); otherwise, they will be rendering own contents
+(:help term_dumpload()).  Remember to execute :edit when occasionally you see
+raw file contents instead of rendered.
+
+At any time, you can add, list, and abandon other screendumps:
+
+	:$argedit testdir/dumps/java_*.dump
+	:args
+	:qall
+
+The listing of argument commands can be found under :help buffer-list.
 
 
-TODO: run test for one specific filetype
+Viewing generated screendumps (from a CI-uploaded artifact)
+-----------------------------------------------------------
+
+After you have downloaded an artifact archive containing failed screendumps
+and extracted its files in a temporary directory, you need to set up a "dumps"
+directory by creating a symlink:
+
+	cd /path/to/fork
+	ln -s $(pwd)/runtime/syntax/testdir/dumps \
+				/tmp/runtime/syntax/testdir/dumps
+
+You can now examine the extracted screendumps:
+
+	./src/vim --clean -S runtime/syntax/testdir/viewdumps.vim \
+				/tmp/runtime/syntax/testdir/failed/*.dump
+
+
+Viewing generated screendumps (submitted for a pull request)
+------------------------------------------------------------
+
+Note: There is also a "git difftool" extension described in
+      src/testdir/commondumps.vim
+
+First, you need to check out the topic branch with the proposed changes and
+write down a difference list between the HEAD commit (index) and its parent
+commit with respect to the changed "dumps" filenames:
+
+	cd /path/to/fork
+	git switch prs/1234
+	git diff-index --relative=runtime/syntax/testdir/dumps/ \
+				--name-only prs/1234~1 > /tmp/filelist
+
+Then, you need to check out the master branch, change the current working
+directory to reconcile relative filepaths written in the filenames list, copy
+in the "failed" directory the old "dumps" files, whose names are on the same
+list, and follow it by checking out the topic branch:
+
+	git switch master
+	cd runtime/syntax/testdir/dumps
+	cp -t ../failed $(cat /tmp/filelist)
+	git switch prs/1234
+
+Make note of any missing new screendumps.  Please remember about the
+introduced INVERTED relation between "dumps" and "failed", i.e. the files to
+be committed are in "dumps" already and their old versions are in "failed".
+Therefore, you need to copy the missing new screendumps from "dumps" to
+"failed":
+
+	cp -t ../failed foo_10.dump foo_11.dump foo_12.dump
+
+After you have changed the current working directory to its parent directory,
+you can now examine the screendumps from the "failed" directory (note that new
+screendumps will be shown with no difference between their versions):
+
+	cd ..
+	../../../src/vim --clean -S viewdumps.vim
+
+
 TODO: test syncing by jumping around
