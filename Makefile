@@ -63,6 +63,7 @@ VIM_FOR_SYNTAXTEST = ../../src/vim
 
 # (For local testing only with GNU Make.)
 VIM_SYNTAX_TEST_FILTER =
+VIM_SYNTAX_TEST_WAIT_TIME =
 
 syntaxtest:
 	cd runtime/syntax && \
@@ -114,6 +115,7 @@ MINOR = 1
 # - With these features: "make depend" (works best with gcc).
 # - If you have a lint program: "make lint" and check the output (ignore GTK
 #   warnings).
+# - compile release versions using -DNDEBUG to disable assert()s
 # - If you have valgrind, enable it in src/testdir/Makefile and run "make
 #   test".  Enable EXITFREE, disable GUI, scheme and tcl to avoid false alarms.
 #   Check the valgrind output.

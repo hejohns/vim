@@ -248,11 +248,11 @@ get_vts_sum(int *vts_array, int index)
     int	sum = 0;
     int	i;
 
-    // Perform the summation for indeces within the actual array.
+    // Perform the summation for indices within the actual array.
     for (i = 1; i <= index && i <= vts_array[0]; i++)
 	sum += vts_array[i];
 
-    // Add topstops whose indeces exceed the actual array.
+    // Add tabstops whose indices exceed the actual array.
     if (i <= index)
 	sum += vts_array[vts_array[0]] * (index - vts_array[0]);
 
@@ -2796,8 +2796,6 @@ do_addsub(
     linenr_T	Prenum1)
 {
     int		col;
-    char_u	*buf1;
-    char_u	buf2[NUMBUFLEN];
     int		pre;		// 'X'/'x': hex; '0': octal; 'B'/'b': bin
     static int	hexupper = FALSE;	// 0xABC
     uvarnumber_T	n;
@@ -3012,6 +3010,10 @@ do_addsub(
     }
     else
     {
+	char_u	*buf1;
+	int	buf1len;
+	char_u	buf2[NUMBUFLEN];
+	int	buf2len;
 	pos_T	save_pos;
 	int	i;
 
@@ -3174,20 +3176,20 @@ do_addsub(
 	    for (bit = bits; bit > 0; bit--)
 		if ((n >> (bit - 1)) & 0x1) break;
 
-	    for (i = 0; bit > 0 && i < (NUMBUFLEN - 1); bit--)
-		buf2[i++] = ((n >> (bit - 1)) & 0x1) ? '1' : '0';
+	    for (buf2len = 0; bit > 0 && buf2len < (NUMBUFLEN - 1); bit--)
+		buf2[buf2len++] = ((n >> (bit - 1)) & 0x1) ? '1' : '0';
 
-	    buf2[i] = '\0';
+	    buf2[buf2len] = NUL;
 	}
 	else if (pre == 0)
-	    vim_snprintf((char *)buf2, NUMBUFLEN, "%llu", n);
+	    buf2len = vim_snprintf((char *)buf2, NUMBUFLEN, "%llu", n);
 	else if (pre == '0')
-	    vim_snprintf((char *)buf2, NUMBUFLEN, "%llo", n);
+	    buf2len = vim_snprintf((char *)buf2, NUMBUFLEN, "%llo", n);
 	else if (pre && hexupper)
-	    vim_snprintf((char *)buf2, NUMBUFLEN, "%llX", n);
+	    buf2len = vim_snprintf((char *)buf2, NUMBUFLEN, "%llX", n);
 	else
-	    vim_snprintf((char *)buf2, NUMBUFLEN, "%llx", n);
-	length -= (int)STRLEN(buf2);
+	    buf2len = vim_snprintf((char *)buf2, NUMBUFLEN, "%llx", n);
+	length -= buf2len;
 
 	/*
 	 * Adjust number of zeros to the new number of digits, so the
@@ -3199,8 +3201,10 @@ do_addsub(
 	    while (length-- > 0)
 		*ptr++ = '0';
 	*ptr = NUL;
+	buf1len = (int)(ptr - buf1);
 
-	STRCAT(buf1, buf2);
+	STRCPY(buf1 + buf1len, buf2);
+	buf1len += buf2len;
 
 	// Insert just after the first character to be removed, so that any
 	// text properties will be adjusted.  Then delete the old number
@@ -3208,7 +3212,7 @@ do_addsub(
 	save_pos = curwin->w_cursor;
 	if (todel > 0)
 	    inc_cursor();
-	ins_str(buf1);		// insert the new number
+	ins_str(buf1, (size_t)buf1len);		// insert the new number
 	vim_free(buf1);
 
 	// del_char() will also mark line needing displaying

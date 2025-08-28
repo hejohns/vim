@@ -20,6 +20,14 @@ indent_size = 2
 # https://spec.commonmark.org/0.31.2/#hard-line-breaks
 trim_trailing_whitespace = false
 
+[*.vim]
+indent_style = space
+indent_size = 2
+
+[runtime/pack/dist/opt/{comment,nohlsearch}/**.vim]
+indent_style = space
+indent_size = 4
+
 [runtime/doc/**.txt]
 # It can mess up some documentation by trying to strip trailing whitespaces
 trim_trailing_whitespace = false
@@ -27,3 +35,12 @@ trim_trailing_whitespace = false
 [src/testdir/test*.vim]
 # Some tests need trailing whitespaces, for example `set showbreak=>>\ `
 trim_trailing_whitespace = false
+
+#
+# Some custom files do not use tabs
+#
+[src/sign.c]
+indent_style = space
+
+[src/sound.c]
+indent_style = space

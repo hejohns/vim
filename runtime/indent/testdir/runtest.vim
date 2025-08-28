@@ -14,19 +14,6 @@ set modeline
 set debug=throw
 set nomore
 
-" Remember the directory where we started.
-let indentDir = getcwd()
-cd ../../src/testdir
-
-" Needed for ValgrindOrAsan().
-source shared.vim
-exe 'cd ' .. fnameescape(indentDir)
-
-if ValgrindOrAsan()
-  let g:vim_indent = {"searchpair_timeout": 1024}
-  let g:python_indent = {"searchpair_timeout": 1024}
-endif
-
 au! SwapExists * call HandleSwapExists()
 func HandleSwapExists()
   " Ignore finding a swap file for the test input and output, the user might be
@@ -138,10 +125,10 @@ for fname in glob('testdir/*.in', 1, 1)
 
     if failed
       let failed_count += 1
-      exe 'write ' .. root .. '.fail'
+      silent exe 'write ' .. root .. '.fail'
       echoerr 'Test ' .. fname .. ' FAILED!'
     else
-      exe 'write ' .. root .. '.out'
+      silent exe 'write ' .. root .. '.out'
       echo "Test " .. fname .. " OK\n"
     endif
 

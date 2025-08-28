@@ -366,15 +366,14 @@ readfile(
 	    goto theend;
 	}
     }
+#if defined(UNIX) || defined(VMS)
+    if (!read_stdin && fname != NULL)
+	perm = mch_getperm(fname);
+#endif
 
     if (!read_stdin && !read_buffer && !read_fifo)
     {
 #if defined(UNIX) || defined(VMS)
-	/*
-	 * On Unix it is possible to read a directory, so we have to
-	 * check for it before the mch_open().
-	 */
-	perm = mch_getperm(fname);
 	if (perm >= 0 && !S_ISREG(perm)		    // not a regular file ...
 		      && !S_ISFIFO(perm)	    // ... or fifo
 		      && !S_ISSOCK(perm)	    // ... or socket
@@ -384,6 +383,10 @@ readfile(
 # endif
 						)
 	{
+	    /*
+	     * On Unix it is possible to read a directory, so we have to
+	     * check for it before the mch_open().
+	     */
 	    if (S_ISDIR(perm))
 	    {
 		filemess(curbuf, fname, (char_u *)_(msg_is_a_directory), 0);
@@ -3186,7 +3189,8 @@ msg_add_lines(
 
     if (shortmess(SHM_LINES))
 	vim_snprintf((char *)IObuff + len, IOSIZE - (size_t)len,
-		"%s%ldL, %lldB", insert_space ? " " : "", lnum, (varnumber_T)nchars);
+		// l10n: L as in line, B as in byte
+		_("%s%ldL, %lldB"), insert_space ? " " : "", lnum, (varnumber_T)nchars);
     else
     {
 	len += vim_snprintf((char *)IObuff + len, IOSIZE - (size_t)len,
@@ -3531,6 +3535,9 @@ shorten_fnames(int force)
     }
     status_redraw_all();
     redraw_tabline = TRUE;
+#if defined(FEAT_TABPANEL)
+    redraw_tabpanel = TRUE;
+#endif
 #if defined(FEAT_PROP_POPUP) && defined(FEAT_QUICKFIX)
     popup_update_preview_title();
 #endif
@@ -5345,14 +5352,13 @@ vim_tempname(
 	    long	nr;
 	    long	off;
 # endif
+	    size_t	itmplen;
 
 	    // Expand $TMP, leave room for "/v1100000/999999999".
 	    // Skip the directory check if the expansion fails.
-	    expand_env((char_u *)tempdirs[i], itmp, TEMPNAMELEN - 20);
+	    itmplen = expand_env((char_u *)tempdirs[i], itmp, TEMPNAMELEN - 20);
 	    if (itmp[0] != '$' && mch_isdir(itmp))
 	    {
-		size_t	itmplen = STRLEN(itmp);
-
 		// directory exists
 		if (!after_pathsep(itmp, itmp + itmplen))
 		{
@@ -5473,6 +5479,8 @@ vim_tempname(
     // "sh".  NOTE: This also checks 'shellcmdflag' to help those people who
     // didn't set 'shellslash' but only if not using PowerShell.
     retval = utf16_to_enc(itmp, NULL);
+    if (retval == NULL)
+	return NULL;
     shname = gettail(p_sh);
     if ((*p_shcf == '-' && !(strstr((char *)shname, "powershell") != NULL
 			     || strstr((char *)shname, "pwsh") != NULL ))

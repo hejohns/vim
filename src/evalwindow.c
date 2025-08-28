@@ -106,8 +106,8 @@ win_id2wp_tp(int id, tabpage_T **tpp)
 	}
 #ifdef FEAT_PROP_POPUP
     // popup windows are in separate lists
-     FOR_ALL_TABPAGES(tp)
-	 FOR_ALL_POPUPWINS_IN_TAB(tp, wp)
+    FOR_ALL_TABPAGES(tp)
+	FOR_ALL_POPUPWINS_IN_TAB(tp, wp)
 	     if (wp->w_id == id)
 	     {
 		 if (tpp != NULL)
@@ -563,9 +563,10 @@ f_getwininfo(typval_T *argvars, typval_T *rettv)
 	{
 	    tabnr++;
 	    FOR_ALL_POPUPWINS_IN_TAB(tp, wp)
-	    if (wp == wparg)
-		break;
+		if (wp == wparg)
+		    goto found;
 	}
+found:
 	d = get_win_info(wparg, tp == NULL ? 0 : tabnr, 0);
 	if (d != NULL)
 	    list_append_dict(rettv->vval.v_list, d);

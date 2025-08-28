@@ -1,7 +1,6 @@
 " Test findfile() and finddir()
 
-source check.vim
-import './vim9.vim' as v9
+import './util/vim9.vim' as v9
 
 let s:files = [ 'Xfinddir1/foo',
       \         'Xfinddir1/bar',
@@ -220,6 +219,36 @@ func Test_finddir_error()
   call assert_fails('call finddir("x", "", [])', 'E745:')
   call assert_fails('call finddir("x", "**x")', 'E343:')
   call assert_fails('call finddir("x", repeat("x", 5000))', 'E854:')
+endfunc
+
+func Test_findfile_with_suffixesadd()
+  let save_path = &path
+  let save_dir = getcwd()
+  set path=,,
+  call mkdir('Xfinddir1', 'pR')
+  cd Xfinddir1
+
+  call writefile([], 'foo.c', 'D')
+  call writefile([], 'bar.cpp', 'D')
+  call writefile([], 'baz.cc', 'D')
+  call writefile([], 'foo.o', 'D')
+  call writefile([], 'bar.o', 'D')
+  call writefile([], 'baz.o', 'D')
+
+  set suffixesadd=.c,.cpp
+  call assert_equal('foo.c', findfile('foo'))
+  call assert_equal('./foo.c', findfile('./foo'))
+  call assert_equal('bar.cpp', findfile('bar'))
+  call assert_equal('./bar.cpp', findfile('./bar'))
+  call assert_equal('', findfile('baz'))
+  call assert_equal('', findfile('./baz'))
+  set suffixesadd+=.cc
+  call assert_equal('baz.cc', findfile('baz'))
+  call assert_equal('./baz.cc', findfile('./baz'))
+
+  set suffixesadd&
+  call chdir(save_dir)
+  let &path = save_path
 endfunc
 
 " Test for the :find, :sfind and :tabfind commands
@@ -805,5 +834,36 @@ func Test_findfunc_callback()
   %bw!
 endfunc
 
+" Test using environment variables with spaces
+func Test_path_env_variable_with_whitespaces()
+    let save_path = &path
+    defer execute('let &path = save_path')
+
+    let $testdir = 'Xpath with some whites'
+    call mkdir($testdir, 'R')
+
+    " Check direct usage yields the same result that autocomplete
+    call feedkeys(':set path=$testdir' .. "\<C-A>\<CR>", 'xt')
+    let auto_testpath = &path
+    " include autocomplete suffix
+    exe "set path=$testdir" .. "/"
+    call assert_equal(auto_testpath, &path)
+
+    " Check a file can be found using environment variables
+    let expanded_test_path = expand('$testdir/test.txt')
+    call writefile(['testing...'], expanded_test_path)
+
+    " hinting an environment variable path
+    call assert_equal(expanded_test_path, findfile('test.txt', $test_dir))
+
+    " using 'path' option with an environment variable
+    set path=$testdir
+    call assert_equal(expanded_test_path, findfile('test.txt'))
+
+    " using :find instead of findfile()
+    find test.txt
+    call assert_equal(expanded_test_path, expand('%:.'))
+    enew
+endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

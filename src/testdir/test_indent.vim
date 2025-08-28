@@ -1,8 +1,5 @@
 " Test for various indent options
 
-source shared.vim
-source check.vim
-
 func Test_preserveindent()
   new
   " Test for autoindent copying indent from the previous line
@@ -106,6 +103,44 @@ func Test_preproc_indent()
   call assert_equal('#define FOO 1', getline(1))
   set cindent&
 
+  close!
+endfunc
+
+func Test_userlabel_indent()
+  new
+  call setline(1, ['{', 'label:'])
+  normal GV=
+  call assert_equal('label:', getline(2))
+
+  call setline(2, 'läbél:')
+  normal GV=
+  call assert_equal('läbél:', getline(2))
+
+  close!
+endfunc
+
+" Test that struct members are aligned
+func Test_struct_indent()
+  new
+  call setline(1, ['struct a a = {', '1,', '1,'])
+  normal gg=G
+  call assert_equal(getline(2), getline(3))
+
+  call setline(1, 'a = (struct a) {')
+  normal gg=G
+  call assert_equal(getline(2), getline(3))
+
+  call setline(1, 'void *ptr = &(static struct a) {{')
+  normal gg=G
+  call assert_equal(getline(2), getline(3))
+
+  call setline(1, 'a = (macro(arg1, "str)))")) {')
+  normal gg=G
+  call assert_equal(getline(2), getline(3))
+
+  call setline(1, 'return (struct a) {')
+  normal gg=G
+  call assert_equal(getline(2), getline(3))
   close!
 endfunc
 

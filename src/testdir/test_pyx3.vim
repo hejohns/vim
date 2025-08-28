@@ -1,7 +1,6 @@
 " Test for pyx* commands and functions with Python 3.
 
 set pyx=3
-source check.vim
 CheckFeature python3
 
 let s:py2pattern = '^2\.[0-7]\.\d\+'
@@ -139,7 +138,10 @@ result+='B'
   pyx << trim eof
     result+='E'
   eof
-  call assert_equal('ABCDE', pyxeval('result'))
+  pyx << trimm
+result+='F'
+trimm
+  call assert_equal('ABCDEF', pyxeval('result'))
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

@@ -56,10 +56,17 @@ silent! endwhile
 " In the GUI we can always change the screen size.
 if has('gui_running')
   if has('gui_gtk')
-    " to keep screendump size unchanged
+    " Use e.g. SetUp() and TearDown() to change "&guifont" when needed;
+    " otherwise, keep the following value to match current screendumps.
     set guifont=Monospace\ 10
   endif
-  set columns=80 lines=25
+
+  func s:SetDefaultOptionsForGUIBuilds()
+    set columns=80 lines=25
+  endfunc
+else
+  func s:SetDefaultOptionsForGUIBuilds()
+  endfunc
 endif
 
 " Check that the screen size is at least 24 x 80 characters.
@@ -94,10 +101,13 @@ endif
 set shellslash
 
 " Common with all tests on all systems.
-source setup.vim
+source util/setup.vim
 
 " Needed for RunningWithValgrind().
-source shared.vim
+source util/shared.vim
+
+" Needed for the various Check commands
+source util/check.vim
 
 " For consistency run all tests with 'nocompatible' set.
 " This also enables use of line continuation.
@@ -173,6 +183,7 @@ endif
 
 
 " Prepare for calling test_garbagecollect_now().
+" Also avoids some delays in Insert mode completion.
 let v:testing = 1
 
 " By default, copy each buffer line into allocated memory, so that valgrind can
@@ -244,10 +255,10 @@ func RunTheTest(test)
   echoconsole prefix .. 'Executing ' .. a:test
 
   if has('timers')
-    " No test should take longer than 30 seconds.  If it takes longer we
+    " No test should take longer than 45 seconds.  If it takes longer we
     " assume we are stuck and need to break out.
     let test_timeout_timer =
-          \ timer_start(RunningWithValgrind() ? 50000 : 30000, 'TestTimeout')
+          \ timer_start(RunningWithValgrind() ? 90000 : 45000, 'TestTimeout')
     let g:timeout_start = localtime()
   endif
 
@@ -265,9 +276,15 @@ func RunTheTest(test)
   " buffers.
   %bwipe!
 
+  " Clear all children notifications in case there are stale ones left
+  let g:child_notification = 0
+
   " The test may change the current directory. Save and restore the
   " directory after executing the test.
   let save_cwd = getcwd()
+
+  " Permit "SetUp()" implementations to override default settings.
+  call s:SetDefaultOptionsForGUIBuilds()
 
   if exists("*SetUp")
     try
@@ -526,7 +543,7 @@ func FinishTesting()
   split messages
   call append(line('$'), '')
   call append(line('$'), 'From ' . g:testname . ':')
-  call append(line('$'), s:messages->map({_, val -> substitute(val, '\%x1b\[\d\?m', '', 'g')}))
+  call append(line('$'), s:messages->map({_, val -> substitute(val, '\%x1b[[|]\(\d\?\|\d\+\)[hm]', '', 'g')}))
   write
 
   qall!
@@ -602,6 +619,8 @@ for g:testfunc in sort(s:tests)
 
   " A test can set g:test_is_flaky to retry running the test.
   let g:test_is_flaky = 0
+
+  let g:check_screendump_called = v:false
 
   " A test can set g:max_run_nr to change the max retry count.
   let g:max_run_nr = 5

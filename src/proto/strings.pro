@@ -17,7 +17,6 @@ int vim_stricmp(char *s1, char *s2);
 int vim_strnicmp(char *s1, char *s2, size_t len);
 int vim_strnicmp_asc(char *s1, char *s2, size_t len);
 char_u *vim_strchr(char_u *string, int c);
-char *vim_strnchr(const char *p, size_t *n, int c);
 char_u *vim_strbyte(char_u *string, int c);
 char_u *vim_strrchr(char_u *string, int c);
 void sort_strings(char_u **files, int count);
@@ -53,4 +52,6 @@ void f_tolower(typval_T *argvars, typval_T *rettv);
 void f_toupper(typval_T *argvars, typval_T *rettv);
 void f_tr(typval_T *argvars, typval_T *rettv);
 void f_trim(typval_T *argvars, typval_T *rettv);
+void f_uridecode(typval_T *argvars, typval_T *rettv);
+void f_uriencode(typval_T *argvars, typval_T *rettv);
 /* vim: set ft=c : */

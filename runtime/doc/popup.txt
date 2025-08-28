@@ -1,4 +1,4 @@
-*popup.txt*  For Vim version 9.1.  Last change: 2025 Jan 08
+*popup.txt*  For Vim version 9.1.  Last change: 2025 Aug 27
 
 
 		  VIM REFERENCE MANUAL    by Bram Moolenaar
@@ -285,6 +285,7 @@ popup_create({what}, {options})				*popup_create()*
 		an existing swap file, it is silently opened read-only, as if
 		a |SwapExists| autocommand had set |v:swapchoice| to 'o'.
 		This is because we assume the buffer is only used for viewing.
+		The buffer number cannot refer to a closing buffer.	*E1551*
 
 		{options} is a dictionary with many possible entries.
 		See |popup_create-arguments| for details.
@@ -504,7 +505,7 @@ popup_menu({what}, {options})				 *popup_menu()*
 				\ mapping: 0,
 				\ })
 <		The current line is highlighted with a match using
-		"PopupSelected", or "PmenuSel" if that is not defined.
+		|hl-PopupSelected| which is linked to "PmenuSel" by default.
 
 		Use {options} to change the properties.  Should at least set
 		"callback" to a function that handles the selected item.
@@ -559,7 +560,7 @@ popup_notification({what}, {options})			 *popup_notification()*
 				\ close: 'click',
 				\ padding: [0,1,0,1],
 				\ })
-<		The PopupNotification highlight group is used instead of
+<		The |hl-PopupNotification| highlight group is used instead of
 		WarningMsg if it is defined.
 
 		Without the |+timers| feature the popup will not disappear

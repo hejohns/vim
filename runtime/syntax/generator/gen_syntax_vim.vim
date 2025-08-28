@@ -1,7 +1,7 @@
 " Vim syntax file generator
-" Language: Vim script
-" Maintainer: Hirohito Higashi (h_east)
-" Last Change: 2024 Dec 29
+" Language:		 Vim script
+" Maintainer:  Hirohito Higashi (h_east)
+" Last Change: 2025 Aug 27
 
 let s:keepcpo= &cpo
 set cpo&vim
@@ -234,16 +234,60 @@ function s:parse_vim_command(cmd)
 	endtry
 endfunc
 
+function s:memoize_cmd_modifiers()
+	let modifiers = []
+	function _() closure
+		if empty(modifiers)
+			try
+				let file_name = $VIM_SRCDIR .. '/ex_docmd.c'
+
+				new
+				exec 'read ' .. file_name
+				norm! gg
+				exec ':/^static cmdmod_info_T cmdmod_info_tab\[] = {/+1;/^};/-1yank'
+				%delete _
+
+				put
+				1delete _
+
+				let list = []
+				for line in getline(1, line('$'))
+					let list = matchlist(line, '^\s*{"\(\w\+\)".*')
+					" :browse and :confirm handled separately as lower priority matches
+					" because they have same-named builtin functions
+					if index(['browse', 'confirm'], list[1]) == -1
+						call add(modifiers, copy(list[1]))
+					endif
+				endfor
+
+				quit!
+
+				if empty(modifiers)
+					throw 'cmd modifiers list is empty'
+				endif
+
+			catch /.*/
+				call s:err_gen('')
+				throw 'exit'
+			endtry
+		endif
+		return modifiers
+	endfunction
+	return function("_")
+endfunction
+let s:get_cmd_modifiers = s:memoize_cmd_modifiers()
+
 function s:get_vim_command_type(cmd_name)
 	" Return value:
 	"   0: normal
 	"   1: (Reserved)
-	"   2: abbrev (without un)
+	"   2: abbrev
 	"   3: menu
 	"   4: map
 	"   5: mapclear
 	"   6: unmap
 	"   7: abclear
+	"   8: modifiers
 	"   99: (Exclude registration of "syn keyword")
 	let ab_prefix   = '^[ci]\?'
 	let menu_prefix = '^\%([acinostvx]\?\|tl\)'
@@ -257,14 +301,18 @@ function s:get_vim_command_type(cmd_name)
 		abstract
 		append
 		augroup
-		augroup
 		autocmd
 		behave
 		call
 		catch
+		chdir
 		class
+		copy
+		debuggreedy
 		def
 		delcommand
+		delete
+		delfunction
 		doautoall
 		doautocmd
 		echo
@@ -274,31 +322,68 @@ function s:get_vim_command_type(cmd_name)
 		echomsg
 		echon
 		echowindow
+		else
 		elseif
 		endclass
 		enddef
 		endenum
 		endfunction
+		endif
 		endinterface
 		enum
+		eval
 		execute
 		export
+		filetype
+		filter
 		final
 		for
 		function
+		grep
+		grepadd
+		helpgrep
 		if
+		import
 		interface
 		insert
+		join
+		k
 		let
 		loadkeymap
+		lhelpgrep
+		lvimgrep
+		lvimgrepadd
+		make
+		lua
+		luado
+		luafile
 		map
 		mapclear
+		mark
 		match
+		mzscheme
+		mzfile
 		noremap
 		new
 		normal
+		perl
+		perldo
 		popup
+		profdel
+		profile
 		public
+		python
+		pyfile
+		pydo
+		python3
+		py3
+		py3do
+		py3file
+		pythonx
+		pyx
+		pyxdo
+		pyxfile
+		redir
 		return
 		set
 		setglobal
@@ -306,21 +391,29 @@ function s:get_vim_command_type(cmd_name)
 		sleep
 		smagic
 		snomagic
+		sort
+		split
 		static
 		substitute
+		swapname
 		syntax
+		tcl
+		tcldo
+		tclfile
 		this
 		throw
 		type
+		uniq
 		unlet
 		unmap
 		var
 		vim9script
+		vimgrep
+		vimgrepadd
 		while
 	EOL
 	" Required for original behavior
 	" \	'global', 'vglobal'
-
 	if index(exclude_list, a:cmd_name) != -1
 		let ret = 99
 	elseif a:cmd_name =~# '^\%(\%(un\)\?abbreviate\|noreabbrev\|\l\%(nore\|un\)\?abbrev\)$'
@@ -335,6 +428,8 @@ function s:get_vim_command_type(cmd_name)
 		let ret = 5
 	elseif a:cmd_name =~# map_prefix . 'unmap$'
 		let ret = 6
+	elseif index(s:get_cmd_modifiers(), a:cmd_name) != -1
+		let ret = 8
 	else
 		let ret = 0
 	endif
@@ -377,17 +472,21 @@ function s:parse_vim_event(li)
 		new
 		exec 'read ' . file_name
 		norm! gg
-		exec '/^static keyvalue_T event_tab\[] = {$/+1;/^};$/-1yank'
+		exec '/^static keyvalue_T event_tab\[NUM_EVENTS] = {$/+1;/^};$/-1yank'
 		%delete _
 
 		put
 		g!/^\s*KEYVALUE_ENTRY(/d
 
 		for line in getline(1, line('$'))
-			let list = matchlist(line, '^\s*KEYVALUE_ENTRY(EVENT_\w\+,\s*"\(\w\+\)"')
+			let list = matchlist(line, '^\s*KEYVALUE_ENTRY(-\?EVENT_\w\+,\s*"\(\w\+\)"')
 			let item.name = list[1]
 			call add(a:li, copy(item))
 		endfor
+
+		" "User" requires a user defined argument event.
+		" (Separately specified in vim.vim.base).
+		call filter(a:li, {idx, val -> val.name !=# 'User'})
 
 		quit!
 
@@ -409,7 +508,7 @@ function s:parse_vim_function(li)
 		new
 		exec 'read ' . file_name
 		norm! gg
-		exec '/^static\s\+funcentry_T\s\+global_functions\[\]\s*=\s*$/+1;/^};/-1yank'
+		exec '/^static\s\+const\s\+funcentry_T\s\+global_functions\[\]\s*=\s*$/+1;/^};/-1yank'
 		%delete _
 
 		put
@@ -428,6 +527,33 @@ function s:parse_vim_function(li)
 
 		if empty(a:li)
 			throw 'function is empty'
+		endif
+	catch /.*/
+		call s:err_gen('')
+		throw 'exit'
+	endtry
+endfunc
+
+" ------------------------------------------------------------------------------
+function s:parse_vim_group(li)
+	try
+		let file_name = $VIM_SRCDIR . '/../runtime/syntax/syncolor.vim'
+		let item = {}
+
+		new
+		exec 'read ' . file_name
+		g!/^\s*Syn\%(Color\|Link\)/d
+		%s/^\s*Syn\%(Color\|Link\)\s\+\(\w\+\).*/\1/
+
+		for group in getline(1, line('$'))->sort()->uniq()
+			let item.name = group
+			call add(a:li, copy(item))
+		endfor
+
+		quit!
+
+		if empty(a:li)
+			throw 'group is empty'
 		endif
 	catch /.*/
 		call s:err_gen('')
@@ -486,15 +612,19 @@ function s:parse_vim_hlgroup(li)
 
 		" The following highlight groups cannot be extracted from highlight.c
 		" (TODO: extract from HIGHLIGHT_INIT ?)
-		let item.name = 'LineNrAbove'
-		let item.type = 'both'
-		call add(a:li, copy(item))
+		for group in ['ComplMatchIns', 'LineNrAbove', 'LineNrBelow', 'MsgArea', 'Terminal']
+			let item.name = group
+			let item.type = 'both'
+			call add(a:li, copy(item))
+		endfor
 
-		let item.name = 'LineNrBelow'
-		let item.type = 'both'
-		call add(a:li, copy(item))
+		for n in range(1, 9)
+			let item.name = 'User' .. n
+			let item.type = 'both'
+			call add(a:li, copy(item))
+		endfor
 
-		" "Conceal" is an option and cannot be used as keyword, so remove it.
+		" "Conceal" is a :syn option and cannot be used as keyword, so remove it.
 		" (Separately specified as 'syn match' in vim.vim.base).
 		call filter(a:li, {idx, val -> val.name !=# 'Conceal'})
 
@@ -573,6 +703,38 @@ function s:parse_vim_addr_name(li)
 
 		if empty(a:li)
 			throw 'addr_name is empty'
+		endif
+	catch /.*/
+		call s:err_gen('')
+		throw 'exit'
+	endtry
+endfunc
+
+" ------------------------------------------------------------------------------
+function s:parse_vim_var(li)
+	try
+		let file_name = $VIM_SRCDIR . '/evalvars.c'
+		let item = {}
+
+		new
+		exec 'read ' . file_name
+		norm! gg
+		exec '/^} vimvars\[VV_LEN] =\n{$/+1;/^};$/-1yank'
+		%delete _
+
+		put
+		g!/^\s*{VV_NAME(/d
+
+		for line in getline(1, line('$'))
+			let list = matchlist(line, '^\s*{VV_NAME("\(\w\+\)"')
+			let item.name = list[1]
+			call add(a:li, copy(item))
+		endfor
+
+		quit!
+
+		if empty(a:li)
+			throw 'var is empty'
 		endif
 	catch /.*/
 		call s:err_gen('')
@@ -664,6 +826,15 @@ function s:update_syntax_vim_file(vim_info)
 		let lnum = s:search_and_check(kword . ' term output code', base_fname, str_info)
 		let lnum = s:append_syn_any(lnum, str_info, li)
 
+		" vimOption - normal variable
+		let li = a:vim_info.opt
+		let lnum = s:search_and_check(kword . ' normal variable', base_fname, str_info)
+		let lnum = s:append_syn_vimopt(lnum, str_info, li, '', 0)
+		" vimOption - term output code variable
+		let li = a:vim_info.term_out_code
+		let lnum = s:search_and_check(kword . ' term output code variable', base_fname, str_info)
+		let lnum = s:append_syn_any(lnum, str_info, li)
+
 		" Missing vimOption
 		let li = a:vim_info.missing_opt
 		let lnum = s:search_and_check('Missing vimOption', base_fname, str_info)
@@ -676,6 +847,11 @@ function s:update_syntax_vim_file(vim_info)
 		let lnum = s:search_and_check('vimAutoEvent', base_fname, str_info)
 		let lnum = s:append_syn_any(lnum, str_info, li)
 
+		" vimGroup
+		let li = a:vim_info.group
+		let lnum = s:search_and_check('vimGroup', base_fname, str_info)
+		let lnum = s:append_syn_any(lnum, str_info, li)
+
 		" vimHLGroup
 		let li = a:vim_info.hlgroup
 		let lnum = s:search_and_check('vimHLGroup', base_fname, str_info)
@@ -686,9 +862,14 @@ function s:update_syntax_vim_file(vim_info)
 		let lnum = s:search_and_check('vimFuncName', base_fname, str_info)
 		let lnum = s:append_syn_any(lnum, str_info, li)
 
-		" vimUserAttrbCmplt
+		" vimVarName
+		let li = a:vim_info.var
+		let lnum = s:search_and_check('vimVarName', base_fname, str_info)
+		let lnum = s:append_syn_any(lnum, str_info, li)
+
+		" vimUserAttrComplete
 		let li = a:vim_info.compl_name
-		let lnum = s:search_and_check('vimUserCmdAttrCmplt', base_fname, str_info)
+		let lnum = s:search_and_check('vimUserCmdAttrComplete', base_fname, str_info)
 		let lnum = s:append_syn_any(lnum, str_info, li)
 
 		" vimUserAttrbAddr
@@ -713,6 +894,9 @@ function s:update_syntax_vim_file(vim_info)
 		" vimCommand - menu
 		let lnum = s:search_and_check(kword . ' menu', base_fname, str_info)
 		let lnum = s:append_syn_vimcmd(lnum, str_info, li, 3)
+		" vimCommand - modifier
+		let lnum = s:search_and_check(kword . ' modifier', base_fname, str_info)
+		let lnum = s:append_syn_vimcmd(lnum, str_info, li, 8)
 
 		update
 		quit!
@@ -870,9 +1054,11 @@ try
 	let s:vim_info.cmd = []
 	let s:vim_info.event = []
 	let s:vim_info.func = []
+	let s:vim_info.group = []
 	let s:vim_info.hlgroup = []
 	let s:vim_info.compl_name = []
 	let s:vim_info.addr_name = []
+	let s:vim_info.var = []
 
 	set lazyredraw
 	if !$CHECK_HELP_DOC
@@ -881,9 +1067,11 @@ try
 		silent call s:parse_vim_command(s:vim_info.cmd)
 		silent call s:parse_vim_event(s:vim_info.event)
 		silent call s:parse_vim_function(s:vim_info.func)
+		silent call s:parse_vim_group(s:vim_info.group)
 		silent call s:parse_vim_hlgroup(s:vim_info.hlgroup)
 		silent call s:parse_vim_complete_name(s:vim_info.compl_name)
 		silent call s:parse_vim_addr_name(s:vim_info.addr_name)
+		silent call s:parse_vim_var(s:vim_info.var)
 
 		call s:update_syntax_vim_file(s:vim_info)
 	else

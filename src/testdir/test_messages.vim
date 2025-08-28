@@ -1,10 +1,6 @@
 " Tests for :messages, :echomsg, :echoerr
 
-source check.vim
-source shared.vim
-source term_util.vim
-source view_util.vim
-source screendump.vim
+source util/screendump.vim
 
 func Test_messages()
   let oldmore = &more
@@ -324,6 +320,7 @@ endfunc
 
 " Test more-prompt scrollback
 func Test_message_more_scrollback()
+  CheckScreendump
   CheckRunVimInTerminal
 
   let lines =<< trim END
@@ -348,6 +345,7 @@ func Test_message_more_scrollback()
 endfunc
 
 func Test_message_not_cleared_after_mode()
+  CheckScreendump
   CheckRunVimInTerminal
 
   let lines =<< trim END
@@ -382,11 +380,36 @@ func Test_message_not_cleared_after_mode()
   call StopVimInTerminal(buf)
 endfunc
 
+func Test_mode_cleared_after_silent_message()
+  CheckScreendump
+  CheckRunVimInTerminal
+
+  let lines =<< trim END
+    edit XsilentMessageMode.txt
+    call setline(1, 'foobar')
+    autocmd TextChanged * silent update
+  END
+  call writefile(lines, 'XsilentMessageMode', 'D')
+  let buf = RunVimInTerminal('-S XsilentMessageMode', {'rows': 10})
+
+  call term_sendkeys(buf, 'v')
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_mode_cleared_after_silent_message_1', {})
+
+  call term_sendkeys(buf, 'd')
+  call TermWait(buf)
+  call VerifyScreenDump(buf, 'Test_mode_cleared_after_silent_message_2', {})
+
+  call StopVimInTerminal(buf)
+  call delete('XsilentMessageMode.txt')
+endfunc
+
 " Test verbose message before echo command
 func Test_echo_verbose_system()
+  CheckScreendump
   CheckRunVimInTerminal
   CheckUnix    " needs the "seq" command
-  CheckNotMac  " doesn't use /tmp
+  CheckNotMac  " the macos TMPDIR is too long for snapshot testing
 
   let buf = RunVimInTerminal('', {'rows': 10})
   call term_sendkeys(buf, ":4 verbose echo system('seq 20')\<CR>")
