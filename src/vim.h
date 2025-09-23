@@ -1587,6 +1587,7 @@ typedef enum
     , HLF_TPL	    // tabpanel
     , HLF_TPLS	    // tabpanel selected
     , HLF_TPLF	    // tabpanel filler
+    , HLF_PRI	    // "preinsert" in 'completeopt'
     , HLF_COUNT	    // MUST be the last one
 } hlf_T;
 
@@ -1599,7 +1600,7 @@ typedef enum
 		  '+', '=', 'k', '<','[', ']', '{', '}', 'x', 'X', \
 		  '*', '#', '_', '!', '.', 'o', 'q', \
 		  'z', 'Z', 'g', \
-		  '%', '^', '&' }
+		  '%', '^', '&', 'I'}
 
 /*
  * Values for behaviour in spell_move_to
@@ -2363,6 +2364,8 @@ typedef struct
 # ifdef FEAT_GUI_HAIKU
     // No clipboard at the moment. TODO?
 # endif
+    // If we've already warned about missing/unavailable clipboard
+    bool did_warn;
 } Clipboard_T;
 #else
 typedef int Clipboard_T;	// This is required for the prototypes.
