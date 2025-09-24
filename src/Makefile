@@ -3237,7 +3237,7 @@ objects/cindent.o: cindent.c
 objects/clientserver.o: clientserver.c
 	$(CCC) -o $@ clientserver.c
 
-objects/clipboard.o: clipboard.c
+objects/clipboard.o: clipboard.c $(WAYLAND_SRC)
 	$(CCC) -o $@ clipboard.c
 
 objects/cmdexpand.o: cmdexpand.c
