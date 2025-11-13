@@ -1,7 +1,7 @@
 " Vim syntax file generator
 " Language:		 Vim script
 " Maintainer:  Hirohito Higashi (h_east)
-" Last Change: 2025 Sep 23
+" Last Change: 2025 Nov 11
 
 let s:keepcpo= &cpo
 set cpo&vim
@@ -299,14 +299,23 @@ function s:get_vim_command_type(cmd_name)
 		Print
 		X
 		abstract
+		argdo
 		append
 		augroup
 		autocmd
 		behave
+		browse
+		bufdo
 		call
 		catch
+		cdo
+		cfdo
 		chdir
+		change
 		class
+		command
+		confirm
+		const
 		copy
 		debuggreedy
 		def
@@ -338,11 +347,14 @@ function s:get_vim_command_type(cmd_name)
 		filetype
 		filter
 		final
+		folddoopen
+		folddoclosed
 		for
 		function
 		grep
 		grepadd
 		helpgrep
+		highlight
 		if
 		import
 		interface
@@ -350,8 +362,12 @@ function s:get_vim_command_type(cmd_name)
 		join
 		k
 		let
+		ldo
+		lfdo
 		loadkeymap
 		lhelpgrep
+		lgrep
+		lgrepadd
 		lvimgrep
 		lvimgrepadd
 		make
@@ -362,6 +378,7 @@ function s:get_vim_command_type(cmd_name)
 		mapclear
 		mark
 		match
+		menutranslate
 		mzscheme
 		mzfile
 		noremap
@@ -372,6 +389,8 @@ function s:get_vim_command_type(cmd_name)
 		popup
 		profdel
 		profile
+		promptfind
+		promptrepl
 		public
 		python
 		pyfile
@@ -386,6 +405,9 @@ function s:get_vim_command_type(cmd_name)
 		pyxfile
 		redir
 		return
+		ruby
+		rubydo
+		rubyfile
 		set
 		setglobal
 		setlocal
@@ -398,6 +420,8 @@ function s:get_vim_command_type(cmd_name)
 		substitute
 		swapname
 		syntax
+		syntime
+		tabdo
 		tcl
 		tcldo
 		tclfile
@@ -407,6 +431,7 @@ function s:get_vim_command_type(cmd_name)
 		type
 		uniq
 		unlet
+		unlockvar
 		unmap
 		var
 		vim9script
@@ -414,6 +439,7 @@ function s:get_vim_command_type(cmd_name)
 		vimgrepadd
 		while
 		wincmd
+		windo
 	EOL
 	" Required for original behavior
 	" \	'global', 'vglobal'

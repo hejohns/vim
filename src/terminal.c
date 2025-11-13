@@ -40,7 +40,7 @@
 
 #include "vim.h"
 
-#if defined(FEAT_TERMINAL) || defined(PROTO)
+#if defined(FEAT_TERMINAL)
 
 #ifndef MIN
 # define MIN(x,y) ((x) < (y) ? (x) : (y))
@@ -291,10 +291,11 @@ set_term_and_win_size(term_T *term, jobopt_T *opt)
 #ifdef FEAT_GUI
     if (term->tl_system)
     {
-	// Use the whole screen for the system command.  However, it will start
-	// at the command line and scroll up as needed, using tl_toprow.
+	// Use the entire screen (excluding the tabpanel area) for the system
+	// commands.  However, it will start at the command line and scroll up
+	// as needed, using tl_toprow.
 	term->tl_rows = Rows;
-	term->tl_cols = Columns;
+	term->tl_cols = topframe->fr_width;
 	return;
     }
 #endif
@@ -1071,7 +1072,7 @@ expand_terminal_opt(
 	    FALSE);
 }
 
-#if defined(FEAT_SESSION) || defined(PROTO)
+#if defined(FEAT_SESSION)
 /*
  * Write a :terminal command to the session file to restore the terminal in
  * window "wp".
@@ -1340,7 +1341,7 @@ update_cursor(term_T *term, int redraw)
 #ifdef FEAT_GUI
     if (term->tl_system)
 	windgoto(term->tl_cursor_pos.row + term->tl_toprow,
-						      term->tl_cursor_pos.col);
+		firstwin->w_wincol + term->tl_cursor_pos.col);
     else
 #endif
     if (!term_job_running(term))
@@ -2189,7 +2190,7 @@ may_move_terminal_to_buffer(term_T *term, int redraw)
     }
 }
 
-#if defined(FEAT_TIMERS) || defined(PROTO)
+#if defined(FEAT_TIMERS)
 /*
  * Check if any terminal timer expired.  If so, copy text from the terminal to
  * the buffer.
@@ -2593,7 +2594,7 @@ term_get_highlight_id(term_T *term, win_T *wp)
     return syn_name2id(name);
 }
 
-#if defined(FEAT_GUI) || defined(PROTO)
+#if defined(FEAT_GUI)
     cursorentry_T *
 term_get_cursor_shape(guicolor_T *fg, guicolor_T *bg)
 {
@@ -3737,7 +3738,7 @@ term_after_channel_closed(term_T *term)
     return FALSE;
 }
 
-#if defined(FEAT_PROP_POPUP) || defined(PROTO)
+#if defined(FEAT_PROP_POPUP)
 /*
  * If the current window is a terminal in a popup window and the job has
  * finished, close the popup window and to back to the previous window.
@@ -3989,15 +3990,15 @@ update_system_term(term_T *term)
     {
 	if (pos.row < term->tl_rows)
 	{
-	    int max_col = MIN(Columns, term->tl_cols);
+	    int max_col = MIN(topframe->fr_width, term->tl_cols);
 
 	    term_line2screenline(term, NULL, screen, &pos, max_col);
 	}
 	else
 	    pos.col = 0;
 
-	screen_line(curwin, term->tl_toprow + pos.row, 0, pos.col, Columns, -1,
-									    0);
+	screen_line(curwin, term->tl_toprow + pos.row,
+		firstwin->w_wincol, pos.col, topframe->fr_width, -1, 0);
     }
 
     term->tl_dirty_row_start = MAX_ROW;
@@ -6629,7 +6630,7 @@ f_term_sendkeys(typval_T *argvars, typval_T *rettv UNUSED)
     }
 }
 
-#if defined(FEAT_GUI) || defined(FEAT_TERMGUICOLORS) || defined(PROTO)
+#if defined(FEAT_GUI) || defined(FEAT_TERMGUICOLORS)
 /*
  * "term_getansicolors(buf)" function
  */
@@ -6938,7 +6939,7 @@ term_send_eof(channel_T *ch)
 	}
 }
 
-#if defined(FEAT_GUI) || defined(PROTO)
+#if defined(FEAT_GUI)
     job_T *
 term_getjob(term_T *term)
 {
@@ -6946,24 +6947,10 @@ term_getjob(term_T *term)
 }
 #endif
 
-# if defined(MSWIN) || defined(PROTO)
+# if defined(MSWIN)
 
 ///////////////////////////////////////
 // 2. MS-Windows implementation.
-#ifdef PROTO
-typedef int COORD;
-typedef int DWORD;
-typedef int HANDLE;
-typedef int *DWORD_PTR;
-typedef int HPCON;
-typedef int HRESULT;
-typedef int LPPROC_THREAD_ATTRIBUTE_LIST;
-typedef int SIZE_T;
-typedef int PSIZE_T;
-typedef int PVOID;
-typedef int BOOL;
-# define WINAPI
-#endif
 
 HRESULT (WINAPI *pCreatePseudoConsole)(COORD, HANDLE, HANDLE, DWORD, HPCON*);
 HRESULT (WINAPI *pResizePseudoConsole)(HPCON, COORD);
@@ -7290,8 +7277,6 @@ use_conpty(void)
     return has_conpty;
 }
 
-#  ifndef PROTO
-
 #define WINPTY_SPAWN_FLAG_AUTO_SHUTDOWN 1ul
 #define WINPTY_SPAWN_FLAG_EXIT_AFTER_SHUTDOWN 2ull
 #define WINPTY_MOUSE_MODE_FORCE		2
@@ -7316,7 +7301,6 @@ HANDLE (*winpty_agent_process)(void*);
 #define WINPTY_DLL "winpty.dll"
 
 static HINSTANCE hWinPtyDLL = NULL;
-#  endif
 
     static int
 dyn_winpty_init(int verbose)
