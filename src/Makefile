@@ -377,7 +377,7 @@ CONF_OPT_GUI = --enable-gui=gtk3
 # Uncomment the next line to fail if one of the requested language interfaces
 # cannot be configured.  Without this Vim will be build anyway, without
 # the failing interfaces.
-#CONF_OPT_FAIL = --enable-fail-if-missing
+CONF_OPT_FAIL = --enable-fail-if-missing
 
 # LUA
 # Uncomment one of these when you want to include the Lua interface.
@@ -387,7 +387,7 @@ CONF_OPT_GUI = --enable-gui=gtk3
 # Use --with-luajit if you want to use LuaJIT instead of Lua.
 # Set PATH environment variable to find lua or luajit executable.
 # This requires at least "normal" features, "tiny" doesn't work.
-#CONF_OPT_LUA = --enable-luainterp
+CONF_OPT_LUA = --enable-luainterp
 #CONF_OPT_LUA = --enable-luainterp=dynamic
 #CONF_OPT_LUA = --enable-luainterp --with-luajit
 #CONF_OPT_LUA = --enable-luainterp=dynamic --with-luajit
