@@ -41,11 +41,13 @@ static char *(p_dip_inline_values[]) = {"none", "simple", "char", "word", NULL};
 #endif
 static char *(p_nf_values[]) = {"bin", "octal", "hex", "alpha", "unsigned", "blank", NULL};
 static char *(p_ff_values[]) = {FF_UNIX, FF_DOS, FF_MAC, NULL};
-#ifdef FEAT_CLIPBOARD
+#ifdef HAVE_CLIPMETHOD
 // Note: Keep this in sync with did_set_clipboard()
-static char *(p_cb_values[]) = {"unnamed", "unnamedplus", "autoselect", "autoselectplus", "autoselectml", "html", "exclude:", NULL};
-// Note: Keep this in sync with get_clipmethod()
-static char *(p_cpm_values[]) = {"wayland", "x11", NULL};
+static char *(p_cb_values[]) = {"unnamed", "unnamedplus",
+# ifdef FEAT_CLIPBOARD
+    "autoselect", "autoselectplus", "autoselectml", "html", "exclude:",
+# endif
+    NULL};
 #endif
 #ifdef FEAT_CRYPT
 static char *(p_cm_values[]) = {"zip", "blowfish", "blowfish2",
@@ -1391,7 +1393,7 @@ expand_set_casemap(optexpand_T *args, int *numMatches, char_u ***matches)
 	    matches);
 }
 
-#if defined(FEAT_CLIPBOARD)
+#if defined(HAVE_CLIPMETHOD)
     int
 expand_set_clipboard(optexpand_T *args, int *numMatches, char_u ***matches)
 {
@@ -1402,7 +1404,9 @@ expand_set_clipboard(optexpand_T *args, int *numMatches, char_u ***matches)
 	    numMatches,
 	    matches);
 }
+#endif
 
+#ifdef HAVE_CLIPMETHOD
     char *
 did_set_clipmethod(optset_T *args UNUSED)
 {
@@ -1412,12 +1416,61 @@ did_set_clipmethod(optset_T *args UNUSED)
     int
 expand_set_clipmethod(optexpand_T *args, int *numMatches, char_u ***matches)
 {
-    return expand_set_opt_string(
+    // We want to expand using the predefined clipmethod values + clipboard
+    // provider names.
+    int		result;
+    char	**values;
+    int		count, pos = 0, start = 0;
+#ifdef FEAT_EVAL
+    dict_T	*providers = get_vim_var_dict(VV_CLIPPROVIDERS);
+#else
+    dict_T	*providers = NULL;
+#endif
+    hashtab_T	*ht = providers == NULL ? NULL : &providers->dv_hashtab;
+
+    count = (ht == NULL ? 0 : ht->ht_used);
+#ifdef FEAT_WAYLAND_CLIPBOARD
+    count++;
+    start++;
+#endif
+#ifdef FEAT_XCLIPBOARD
+    count++;
+    start++;
+#endif
+    values = ALLOC_MULT(char *, count + 1); // Add NULL terminator too
+
+    if (values == NULL)
+	return FAIL;
+
+#ifdef FEAT_WAYLAND_CLIPBOARD
+    values[pos++] = "wayland";
+#endif
+#ifdef FEAT_XCLIPBOARD
+    values[pos++] = "x11";
+#endif
+
+    if (ht != NULL)
+	for (long_u i = 0; i < ht->ht_mask + 1; i++)
+	{
+	    hashitem_T	*hi = ht->ht_array + i;
+
+	    if (!HASHITEM_EMPTY(hi))
+		values[pos++] = (char *)vim_strsave(hi->hi_key);
+	}
+    values[pos++] = NULL;
+
+    result = expand_set_opt_string(
 	    args,
-	    p_cpm_values,
-	    ARRAY_LENGTH(p_cpm_values) - 1,
+	    values,
+	    count,
 	    numMatches,
 	    matches);
+
+    for (int i = start; i < count; i++)
+	vim_free(values[i]);
+    vim_free(values);
+
+    return result;
 }
 #endif
 
