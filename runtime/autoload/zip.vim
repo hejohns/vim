@@ -1,4 +1,4 @@
-  " zip.vim: Handles browsing zipfiles
+" zip.vim: Handles browsing zipfiles
 " AUTOLOAD PORTION
 " Date:		2024 Aug 21
 " Version:	34
@@ -18,6 +18,12 @@
 " 2025 Jul 12 by Vim Project: drop ../ on write to prevent path traversal attacks
 " 2025 Sep 22 by Vim Project: support PowerShell Core
 " 2025 Dec 20 by Vim Project: use :lcd instead of :cd
+" 2026 Feb 08 by Vim Project: use system() instead of :!
+" 2026 Mar 08 by Vim Project: Make ZipUpdatePS() check for powershell
+" 2026 Apr 01 by Vim Project: Detect more path traversal attacks
+" 2026 Apr 05 by Vim Project: Detect more path traversal attacks
+" 2026 Apr 14 by Vim Project: Detect more path traversal attacks on Windows
+" 2026 Apr 15 by Vim Project: Detect more path traversal attacks on Windows
 " License:	Vim License  (see vim's :help license)
 " Copyright:	Copyright (C) 2005-2019 Charles E. Campbell {{{1
 "		Permission is hereby granted to use and distribute this code,
@@ -139,7 +145,7 @@ endfunction
 function! s:ZipReadPS(zipfile, fname, tempfile)
   " Read a filename within a zipped file to a temporary file.
   " Equivalent to `unzip -p -- zipfile fname > tempfile`
-  if a:fname =~ '/'
+  if &shell =~ 'pwsh'
     call s:Mess('WarningMsg', "***warning*** PowerShell can display, but cannot update, files in archive subfolders")
   endif
   let cmds = [
@@ -158,7 +164,7 @@ endfunction
 function! s:ZipUpdatePS(zipfile, fname)
   " Update a filename within a zipped file
   " Equivalent to `zip -u zipfile fname`
-  if a:fname =~ '/'
+  if &shell =~ 'pwsh' && a:fname =~ '/'
     call s:Mess('Error', "***error*** PowerShell cannot update files in archive subfolders")
     return ':'
   endif
@@ -335,7 +341,8 @@ fun! zip#Read(fname,mode)
   let temp = tempname()
   let fn   = expand('%:p')
 
-  let gnu_cmd = 'sil !' . g:zip_unzipcmd . ' -p -- ' . s:Escape(zipfile, 1) . ' ' . s:Escape(fname, 1) . ' > ' . s:Escape(temp, 1)
+  let gnu_cmd = g:zip_unzipcmd . ' -p -- ' . s:Escape(zipfile, 0) . ' ' . s:Escape(fname, 0) . ' > ' . s:Escape(temp, 0)
+  let gnu_cmd = 'call system(''' . substitute(gnu_cmd, "'", "''", 'g') . ''')'
   let ps_cmd = 'sil !' . s:ZipReadPS(zipfile, fname, temp)
   call s:TryExecGnuFallBackToPs(g:zip_unzipcmd, gnu_cmd, ps_cmd)
 
@@ -364,6 +371,11 @@ fun! zip#Write(fname)
     return
   endif
 
+  if simplify(a:fname) =~ '\.\.[/\\]'
+    call s:Mess('Error', "***error*** (zip#Write) Path Traversal Attack detected, not writing!")
+    return
+  endif
+
   let curdir= getcwd()
   let tmpdir= tempname()
   if tmpdir =~ '\.'
@@ -386,12 +398,24 @@ fun! zip#Write(fname)
   if has("unix")
     let zipfile = substitute(a:fname,'zipfile://\(.\{-}\)::[^\\].*$','\1','')
     let fname   = substitute(a:fname,'zipfile://.\{-}::\([^\\].*\)$','\1','')
+    " fname should not start with a leading slash to avoid writing anywhere into the system
+    if fname =~ '^/'
+      call s:Mess('Error', "***error*** (zip#Write) Path Traversal Attack detected, not writing!")
+      call s:ChgDir(curdir,s:WARNING,"(zip#Write) unable to return to ".curdir."!")
+      return
+    endif
   else
     let zipfile = substitute(a:fname,'^.\{-}zipfile://\(.\{-}\)::[^\\].*$','\1','')
     let fname   = substitute(a:fname,'^.\{-}zipfile://.\{-}::\([^\\].*\)$','\1','')
+    " fname should not start with drive letter, UNC path, or leading slash
+    if fname =~ '^\%(\a:[\\/]\|[\\/]\)'
+      call s:Mess('Error', "***error*** (zip#Write) Path Traversal Attack detected, not writing!")
+      call s:ChgDir(curdir,s:WARNING,"(zip#Write) unable to return to ".curdir."!")
+      return
+    endif
   endif
   if fname =~ '^[.]\{1,2}/'
-    let gnu_cmd = g:zip_zipcmd . ' -d ' . s:Escape(fnamemodify(zipfile,":p"),0) . ' ' . s:Escape(fname,0) 
+    let gnu_cmd = g:zip_zipcmd . ' -d ' . s:Escape(fnamemodify(zipfile,":p"),0) . ' ' . s:Escape(fname,0)
     let gnu_cmd = 'call system(''' . substitute(gnu_cmd, "'", "''", 'g') . ''')'
     let ps_cmd = $"call system({s:Escape(s:ZipDeleteFilePS(zipfile, fname), 1)})"
     call s:TryExecGnuFallBackToPs(g:zip_zipcmd, gnu_cmd, ps_cmd)
@@ -420,7 +444,7 @@ fun! zip#Write(fname)
     let fname = substitute(fname, '[', '[[]', 'g')
   endif
 
-  let gnu_cmd = g:zip_zipcmd . ' -u '. s:Escape(fnamemodify(zipfile,":p"),0) . ' ' . s:Escape(fname,0) 
+  let gnu_cmd = g:zip_zipcmd . ' -u '. s:Escape(fnamemodify(zipfile,":p"),0) . ' ' . s:Escape(fname,0)
   let gnu_cmd = 'call system(''' . substitute(gnu_cmd, "'", "''", 'g') . ''')'
   let ps_cmd = s:ZipUpdatePS(s:Escape(fnamemodify(zipfile, ':p'), 0), s:Escape(fname, 0))
   let ps_cmd = 'call system(''' . substitute(ps_cmd, "'", "''", 'g') . ''')'
@@ -478,9 +502,21 @@ fun! zip#Extract()
   if fname =~ '/$'
     call s:Mess('Error', "***error*** (zip#Extract) Please specify a file, not a directory")
     return
-  elseif fname =~ '^[.]\?[.]/'
+  elseif fname =~ '^[.]\?[.]/' || simplify(fname) =~ '\.\.[/\\]'
     call s:Mess('Error', "***error*** (zip#Browse) Path Traversal Attack detected, not extracting!")
     return
+  endif
+  " block absolute paths
+  if has("unix")
+    if fname =~ '^/'
+      call s:Mess('Error', "***error*** (zip#Extract) Path Traversal Attack detected, not extracting!")
+      return
+    endif
+  else
+    if fname =~ '^\%(\a:[\\/]\|[\\/]\)'
+      call s:Mess('Error', "***error*** (zip#Extract) Path Traversal Attack detected, not extracting!")
+      return
+    endif
   endif
   if filereadable(fname)
     call s:Mess('Error', "***error*** (zip#Extract) <" .. fname .."> already exists in directory, not overwriting!")

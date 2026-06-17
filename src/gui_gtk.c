@@ -1863,12 +1863,12 @@ gui_mch_show_popupmenu(vimmenu_T *menu)
 	gtk_menu_popup_at_pointer(GTK_MENU(menu->submenu_id),
 				  (GdkEvent *)&trigger);
     }
-#else
+# else
     gtk_menu_popup(GTK_MENU(menu->submenu_id),
 		   NULL, NULL,
 		   (GtkMenuPositionFunc)NULL, NULL,
 		   3U, gui.event_time);
-#endif
+# endif
 }
 
 // Ugly global variable to pass "mouse_pos" flag from gui_make_popup() to
@@ -2132,7 +2132,7 @@ find_replace_dialog_create(char_u *arg, int do_replace)
     int		wword = FALSE;
     int		mcase = !p_ic;
     char_u	*conv_buffer = NULL;
-#   define CONV(message) convert_localized_message(&conv_buffer, (message))
+#define CONV(message) convert_localized_message(&conv_buffer, (message))
 
     frdp = (do_replace) ? (&repl_widgets) : (&find_widgets);
 
@@ -2611,3 +2611,12 @@ recent_func_log_func(const gchar *log_domain UNUSED,
     // http://bugzilla.gnome.org/show_bug.cgi?id=664587
 }
 #endif
+
+    void
+gui_mch_set_fullscreen(int flag)
+{
+    if (flag)
+	gtk_window_fullscreen(GTK_WINDOW(gui.mainwin));
+    else
+	gtk_window_unfullscreen(GTK_WINDOW(gui.mainwin));
+}

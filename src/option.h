@@ -95,7 +95,7 @@ typedef enum {
 #   ifdef VMS
 #    define DFLT_EFM	"%A%p^,%C%%CC-%t-%m,%Cat line number %l in file %f,%f|%l| %m"
 #   else // Unix, probably
-#define DFLT_EFM	"%*[^\"]\"%f\"%*\\D%l: %m,\"%f\"%*\\D%l: %m,%-Gg%\\?make[%*\\d]: *** [%f:%l:%m,%-Gg%\\?make: *** [%f:%l:%m,%-G%f:%l: (Each undeclared identifier is reported only once,%-G%f:%l: for each function it appears in.),%-GIn file included from %f:%l:%c:,%-GIn file included from %f:%l:%c\\,,%-GIn file included from %f:%l:%c,%-GIn file included from %f:%l,%-G%*[ ]from %f:%l:%c,%-G%*[ ]from %f:%l:,%-G%*[ ]from %f:%l\\,,%-G%*[ ]from %f:%l,%f:%l:%c:%m,%f(%l):%m,%f:%l:%m,\"%f\"\\, line %l%*\\D%c%*[^ ] %m,%D%*\\a[%*\\d]: Entering directory %*[`']%f',%X%*\\a[%*\\d]: Leaving directory %*[`']%f',%D%*\\a: Entering directory %*[`']%f',%X%*\\a: Leaving directory %*[`']%f',%DMaking %*\\a in %f,%f|%l| %m"
+#    define DFLT_EFM	"%*[^\"]\"%f\"%*\\D%l: %m,\"%f\"%*\\D%l: %m,%-Gg%\\?make[%*\\d]: *** [%f:%l:%m,%-Gg%\\?make: *** [%f:%l:%m,%-G%f:%l: (Each undeclared identifier is reported only once,%-G%f:%l: for each function it appears in.),%-GIn file included from %f:%l:%c:,%-GIn file included from %f:%l:%c\\,,%-GIn file included from %f:%l:%c,%-GIn file included from %f:%l,%-G%*[ ]from %f:%l:%c,%-G%*[ ]from %f:%l:,%-G%*[ ]from %f:%l\\,,%-G%*[ ]from %f:%l,%f:%l:%c:%m,%f(%l):%m,%f:%l:%m,\"%f\"\\, line %l%*\\D%c%*[^ ] %m,%D%*\\a[%*\\d]: Entering directory %*[`']%f',%X%*\\a[%*\\d]: Leaving directory %*[`']%f',%D%*\\a: Entering directory %*[`']%f',%X%*\\a: Leaving directory %*[`']%f',%DMaking %*\\a in %f,%f|%l| %m"
 #   endif
 #  endif
 # endif
@@ -277,8 +277,9 @@ typedef enum {
 #define SHM_RECORDING	'q'		// short recording message
 #define SHM_FILEINFO	'F'		// no file info messages
 #define SHM_SEARCHCOUNT  'S'		// no search stats: '[1/10]'
+#define SHM_UNDO	'u'		// undo messages
 #define SHM_POSIX       "AS"		// POSIX value
-#define SHM_ALL		"rmfixlnwaWtToOsAIcCqFS" // all possible flags for 'shm'
+#define SHM_ALL		"rmfixlnwaWtToOsAIcCqFSu" // all possible flags for 'shm'
 #define SHM_LEN		30		// max length of all flags together
 					// plus a NUL character
 
@@ -363,9 +364,11 @@ typedef enum {
 #define STL_TRUNCMARK	'<'		// truncation mark if line is too long
 #define STL_USER_HL	'*'		// highlight from (User)1..9 or 0
 #define STL_HIGHLIGHT	'#'		// highlight name
+#define STL_LINEBREAK	'@'		// insert a line break
+#define STL_CLICKFUNC	'['		// click handler region
 #define STL_TABPAGENR	'T'		// tab page label nr
 #define STL_TABCLOSENR	'X'		// tab page close nr
-#define STL_ALL		((char_u *) "fFtcvVlLknoObBrRhHmYyWwMqpPaNS{#")
+#define STL_ALL		((char_u *) "fFtcvVlLknoObBrRhHmYyWwMqpPaNS{#@[")
 
 // flags used for parsed 'wildmode'
 #define WIM_FULL	0x01
@@ -373,6 +376,7 @@ typedef enum {
 #define WIM_LIST	0x04
 #define WIM_BUFLASTUSED	0x08
 #define WIM_NOSELECT	0x10
+#define WIM_NOINSERT	0x20
 
 // flags for the 'wildoptions' option
 // each defined char should be unique over all values.
@@ -437,11 +441,11 @@ EXTERN char_u	*p_bg;		// 'background'
 EXTERN int	p_bk;		// 'backup'
 EXTERN char_u	*p_bkc;		// 'backupcopy'
 EXTERN unsigned	bkc_flags;	// flags from 'backupcopy'
-# define BKC_YES		0x001
-# define BKC_AUTO		0x002
-# define BKC_NO			0x004
-# define BKC_BREAKSYMLINK	0x008
-# define BKC_BREAKHARDLINK	0x010
+#define BKC_YES		0x001
+#define BKC_AUTO		0x002
+#define BKC_NO			0x004
+#define BKC_BREAKSYMLINK	0x008
+#define BKC_BREAKHARDLINK	0x010
 EXTERN char_u	*p_bdir;	// 'backupdir'
 EXTERN char_u	*p_bex;		// 'backupext'
 EXTERN char_u	*p_bo;		// 'belloff'
@@ -555,6 +559,7 @@ EXTERN long	p_ph;		// 'pumheight'
 EXTERN long	p_pw;		// 'pumwidth'
 EXTERN long	p_pmw;		// 'pummaxwidth'
 EXTERN char_u	*p_pb;		// 'pumborder'
+EXTERN char_u	*p_pumopt;	// 'pumopt'
 EXTERN char_u	*p_com;		// 'comments'
 EXTERN char_u	*p_cpo;		// 'cpoptions'
 #ifdef FEAT_CSCOPE
@@ -680,7 +685,7 @@ EXTERN int	p_guipty;	// 'guipty'
 #endif
 #if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_MSWIN)
 EXTERN char_u	*p_guiligatures;  // 'guiligatures'
-# endif
+#endif
 #if defined(FEAT_GUI_GTK) || defined(FEAT_GUI_X11)
 EXTERN long	p_ghr;		// 'guiheadroom'
 #endif
@@ -718,8 +723,8 @@ EXTERN char_u	*p_iconstring;	// 'iconstring'
 EXTERN int	p_ic;		// 'ignorecase'
 #if defined(FEAT_XIM) && defined(FEAT_GUI_GTK)
 EXTERN char_u	*p_imak;	// 'imactivatekey'
-#define IM_ON_THE_SPOT		0L
-#define IM_OVER_THE_SPOT	1L
+# define IM_ON_THE_SPOT		0L
+# define IM_OVER_THE_SPOT	1L
 EXTERN long	p_imst;		// 'imstyle'
 #endif
 #if defined(FEAT_EVAL)
@@ -804,6 +809,7 @@ EXTERN char_u	*p_msm;		// 'mkspellmem'
 EXTERN int	p_ml;		// 'modeline'
 EXTERN int	p_mle;		// 'modelineexpr'
 EXTERN long	p_mls;		// 'modelines'
+EXTERN int	p_mlstr;	// 'modelinestrict'
 EXTERN int	p_ma;		// 'modifiable'
 EXTERN int	p_mod;		// 'modified'
 EXTERN char_u	*p_mouse;	// 'mouse'
@@ -897,6 +903,7 @@ EXTERN long	p_sj;		// 'scrolljump'
 EXTERN int	p_scf;		// 'scrollfocus'
 #endif
 EXTERN long	p_so;		// 'scrolloff'
+EXTERN long	p_sop;		// 'scrolloffpad'
 EXTERN char_u	*p_sbo;		// 'scrollopt'
 EXTERN char_u	*p_sections;	// 'sections'
 EXTERN int	p_secure;	// 'secure'
@@ -942,6 +949,7 @@ EXTERN int	p_ssl;		// 'shellslash'
 #endif
 #ifdef FEAT_STL_OPT
 EXTERN char_u	*p_stl;		// 'statusline'
+EXTERN char_u	*p_stlo;	// 'statuslineopt'
 #endif
 EXTERN int	p_sr;		// 'shiftround'
 EXTERN long	p_sw;		// 'shiftwidth'
@@ -1022,6 +1030,7 @@ EXTERN unsigned tc_flags;       // flags from 'tagcase'
 EXTERN long	p_tl;		// 'taglength'
 EXTERN int	p_tr;		// 'tagrelative'
 EXTERN char_u	*p_tags;	// 'tags'
+EXTERN int	p_tagsecure;    // 'tagsecure'
 EXTERN int	p_tgst;		// 'tagstack'
 #if defined(DYNAMIC_TCL)
 EXTERN char_u	*p_tcldll;	// 'tcldll'
@@ -1033,6 +1042,10 @@ EXTERN char_u	*p_tenc;	// 'termencoding'
 #ifdef FEAT_TERMGUICOLORS
 EXTERN int	p_tgc;		// 'termguicolors'
 #endif
+#ifdef UNIX
+EXTERN char_u	*p_trz;		// 'termresize'
+#endif
+EXTERN int	p_tsy;		// 'termsync'
 #ifdef FEAT_TERMINAL
 EXTERN long	p_twsl;		// 'termwinscroll'
 #endif
@@ -1127,7 +1140,7 @@ EXTERN char_u	*p_wop;		// 'wildoptions'
 EXTERN long	p_window;	// 'window'
 #if defined(FEAT_GUI_MSWIN) || defined(FEAT_GUI_MOTIF) || defined(LINT) \
 	|| defined (FEAT_GUI_GTK) || defined(FEAT_GUI_PHOTON)
-#define FEAT_WAK
+# define FEAT_WAK
 EXTERN char_u	*p_wak;		// 'winaltkeys'
 #endif
 EXTERN char_u	*p_wig;		// 'wildignore'
@@ -1144,9 +1157,6 @@ EXTERN long	p_wmw;		// 'winminwidth'
 EXTERN long	p_wiw;		// 'winwidth'
 #ifdef FEAT_WAYLAND
 EXTERN char_u	*p_wse;		// 'wlseat'
-# ifdef FEAT_WAYLAND_CLIPBOARD_FS
-EXTERN int	p_wst;		// 'wlsteal'
-# endif
 EXTERN long     p_wtm;		// 'wltimeoutlen'
 #endif
 #if defined(MSWIN) && defined(FEAT_TERMINAL)
@@ -1369,6 +1379,7 @@ enum
     , WV_SMS
     , WV_SISO
     , WV_SO
+    , WV_SOP
 #ifdef FEAT_SPELL
     , WV_SPELL
 #endif
@@ -1383,10 +1394,12 @@ enum
 #endif
 #ifdef FEAT_STL_OPT
     , WV_STL
+    , WV_STLO
 #endif
     , WV_WFB
     , WV_WFH
     , WV_WFW
+    , WV_WHL
     , WV_WRAP
 #ifdef FEAT_SIGNS
     , WV_SCL

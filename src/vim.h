@@ -7,7 +7,7 @@
  */
 
 #ifndef VIM__H
-# define VIM__H
+#define VIM__H
 
 #include "protodef.h"
 
@@ -39,22 +39,6 @@
 # if (VIM_SIZEOF_INT == 0)
 #  error configure did not run properly.  Check auto/config.log.
 # endif
-
-/*
- * NeXTSTEP / OPENSTEP support deprecation
- *
- * NeXT hardware was discontinued in 1993, and the last OPENSTEP release
- * (4.2) shipped in 1996–1997. No known users remain today.
- *
- * To simplify maintenance, NeXT support is formally deprecated. If you hit
- * this error, please report it to the Vim maintainers.
- *
- * This guard will be removed once the remaining NeXT-specific code paths
- * are deleted in a future release.
- */
-#if defined(NeXT) || defined(__NeXT__)
-# error "NeXTSTEP / OPENSTEP support has been deprecated."
-#endif
 
 # if (defined(__linux__) && !defined(__ANDROID__)) || defined(__CYGWIN__) || defined(__GNU__)
 // Needed for strptime().  Needs to be done early, since header files can
@@ -182,7 +166,7 @@
 # endif
 #endif
 #if defined(MACOS_X) && !defined(HAVE_CONFIG_H)
-#  define VIM_SIZEOF_INT __SIZEOF_INT__
+# define VIM_SIZEOF_INT __SIZEOF_INT__
 #endif
 
 #if VIM_SIZEOF_INT < 4 && !defined(PROTO)
@@ -369,7 +353,7 @@
 #  define PATH_ESC_CHARS ((char_u *)" \t\n*?[{`$\\%#'\"|!<")
 #  define SHELL_ESC_CHARS ((char_u *)" \t\n*?[{`$\\%#'\"|!<>();&")
 # endif
-#  define BUFFER_ESC_CHARS ((char_u *)" \t\n*?[`$\\%#'\"|!<")
+# define BUFFER_ESC_CHARS ((char_u *)" \t\n*?[`$\\%#'\"|!<")
 #endif
 
 // length of a buffer to store a number in ASCII (64 bits binary + NUL)
@@ -705,13 +689,16 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define POPF_INFO	0x200	// used for info of popup menu
 #define POPF_INFO_MENU	0x400	// align info popup with popup menu
 #define POPF_POSINVERT	0x800	// vertical position can be inverted
+#define POPF_OPACITY 0x1000	// popup has opacity/transparency setting
+#define POPF_CLIPWINDOW	0x2000	// confine popup to its host window's rect
 
 // flags used in w_popup_handled
 #define POPUP_HANDLED_1	    0x01    // used by mouse_find_win()
 #define POPUP_HANDLED_2	    0x02    // used by popup_do_filter()
 #define POPUP_HANDLED_3	    0x04    // used by popup_check_cursor_pos()
 #define POPUP_HANDLED_4	    0x08    // used by may_update_popup_mask()
-#define POPUP_HANDLED_5	    0x10    // used by update_popups()
+#define POPUP_HANDLED_5	    0x10    // used by update_popups() and
+				    // update_popup_images()
 
 /*
  * Terminal highlighting attribute bits.
@@ -882,6 +869,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define EXPAND_FILETYPECMD	63
 #define EXPAND_PATTERN_IN_BUF	64
 #define EXPAND_RETAB		65
+#define EXPAND_USER_COMPLETEOPT	66
 
 
 // Values for exmode_active (0 is no exmode)
@@ -919,6 +907,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define WILD_NOSELECT		    0x4000
 #define WILD_MAY_EXPAND_PATTERN	    0x8000
 #define WILD_FUNC_TRIGGER	    0x10000 // called from wildtrigger()
+#define WILD_NOINSERT		    0x20000
 
 // Flags for expand_wildcards()
 #define EW_DIR		0x01	// include directory names
@@ -1109,7 +1098,7 @@ extern int (*dyn_libintl_wputenv)(const wchar_t *envstring);
 #define FM_BACKWARD	0x01	// search backwards
 #define FM_FORWARD	0x02	// search forwards
 #define FM_BLOCKSTOP	0x04	// stop at start/end of block
-#define FM_SKIPCOMM	0x08	// skip comments
+#define FM_SKIPCOMM	0x08	// skip comments (cursor must start outside)
 
 // Values for action argument for do_buffer() and close_buffer()
 #define DOBUF_GOTO	0	// go to specified buffer
@@ -1469,6 +1458,7 @@ enum auto_event
     EVENT_SAFESTATE,		// going to wait for a character
     EVENT_SAFESTATEAGAIN,	// still waiting for a character
     EVENT_SESSIONLOADPOST,	// after loading a session file
+    EVENT_SESSIONLOADPRE,	// before loading a session file
     EVENT_SESSIONWRITEPOST,	// after writing a session file
     EVENT_SHELLCMDPOST,		// after ":!cmd"
     EVENT_SHELLFILTERPOST,	// after ":1,2!cmd", ":w !cmd", ":r !cmd".
@@ -1496,6 +1486,8 @@ enum auto_event
     EVENT_TEXTCHANGEDI,		// text was modified in Insert mode
     EVENT_TEXTCHANGEDP,		// TextChangedI with popup menu visible
     EVENT_TEXTCHANGEDT,		// text was modified in Terminal mode
+    EVENT_TEXTPUTPOST,		// after some text was put
+    EVENT_TEXTPUTPRE,		// before some text was put
     EVENT_TEXTYANKPOST,		// after some text was yanked
     EVENT_USER,			// user defined autocommand
     EVENT_VIMENTER,		// after starting Vim
@@ -1547,6 +1539,7 @@ typedef enum
     , HLF_S	    // status lines
     , HLF_SNC	    // status lines of not-current windows
     , HLF_C	    // column to separate vertically split windows
+    , HLF_CNC	    // column to separate vertically split non-current windows
     , HLF_T	    // Titles for output from ":set all", ":autocmd" etc.
     , HLF_V	    // Visual mode
     , HLF_VNC	    // Visual mode, autoselecting and not clipboard owner
@@ -1577,6 +1570,9 @@ typedef enum
     , HLF_PST	    // popup menu scrollbar thumb
     , HLF_PMB	    // popup menu border
     , HLF_PMS	    // popup menu shadow
+    , HLF_POP	    // popup window body
+    , HLF_POPB	    // popup window border
+    , HLF_POPT	    // popup window title
     , HLF_TP	    // tabpage line
     , HLF_TPS	    // tabpage line selected
     , HLF_TPF	    // tabpage line filler
@@ -1591,19 +1587,21 @@ typedef enum
     , HLF_TPLS	    // tabpanel selected
     , HLF_TPLF	    // tabpanel filler
     , HLF_PRI	    // "preinsert" in 'completeopt'
+    , HLF_WIN	    // window colour
     , HLF_COUNT	    // MUST be the last one
 } hlf_T;
 
 // The HL_FLAGS must be in the same order as the HLF_ enums!
 // When changing this also adjust the default for 'highlight'.
 #define HL_FLAGS {'8', '~', '@', 'd', 'e', 'h', 'i', 'l', 'y', 'm', 'M', \
-		  'n', 'a', 'b', 'N', 'G', 'O', 'r', 's', 'S', 'c', 't', 'v', 'V', \
+		  'n', 'a', 'b', 'N', 'G', 'O', 'r', 's', 'S', 'c', '|', 't', 'v', 'V', \
 		  'w', 'W', 'f', 'F', 'A', 'C', 'D', 'T', 'E', '-', '>', \
 		  'B', 'P', 'R', 'L', \
 		  '+', '=', 'k', '<','[', ']', '{', '}', 'x', 'X', 'j', 'H', \
+		  'p', 'J', 'Q', \
 		  '*', '#', '_', '!', '.', 'o', 'q', \
 		  'z', 'Z', 'g', \
-		  '%', '^', '&', 'I'}
+		  '%', '^', '&', 'I', '('}
 
 /*
  * Values for behaviour in spell_move_to
@@ -1690,7 +1688,8 @@ typedef UINT32_TYPEDEF UINT32_T;
 #define MIN_COLUMNS	12	// minimal columns for screen
 #define MIN_LINES	2	// minimal lines for screen
 #define MIN_CMDHEIGHT	1	// minimal height for command line
-#define STATUS_HEIGHT	1	// height of a status line under a window
+#define STATUS_HEIGHT	1	// default height of a status line under a
+				// window
 #ifdef FEAT_MENU		// height of a status line under a window
 # define WINBAR_HEIGHT(wp)	(wp)->w_winbar_height
 # define VISIBLE_HEIGHT(wp)	((wp)->w_height + (wp)->w_winbar_height)
@@ -1835,9 +1834,9 @@ void *vim_memset(void *, int, size_t);
 // STRICMP() only handles the system locale version, which often does not
 // handle non-ascii properly.
 
-# define MB_STRICMP(d, s)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)MAXCOL)
-# define MB_STRNICMP(d, s, n)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)(n))
-# define MB_STRNICMP2(d, s, n1, n2)	mb_strnicmp2((char_u *)(d), (char_u *)(s), (n1), (n2))
+#define MB_STRICMP(d, s)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)MAXCOL)
+#define MB_STRNICMP(d, s, n)	mb_strnicmp((char_u *)(d), (char_u *)(s), (int)(n))
+#define MB_STRNICMP2(d, s, n1, n2)	mb_strnicmp2((char_u *)(d), (char_u *)(s), (n1), (n2))
 
 #define STRCAT(d, s)	    strcat((char *)(d), (char *)(s))
 #define STRNCAT(d, s, n)    strncat((char *)(d), (char *)(s), (size_t)(n))
@@ -2031,11 +2030,11 @@ typedef enum {
  * bits elsewhere.  That causes memory corruption.  Define time_T and use it
  * for global variables to avoid that.
  */
-# ifdef MSWIN
+#ifdef MSWIN
 typedef __time64_t  time_T;
-# else
+#else
 typedef time_t	    time_T;
-# endif
+#endif
 
 #ifdef _WIN64
 typedef __int64 sock_T;
@@ -2322,6 +2321,11 @@ typedef enum {
 # define VIM_ATOM_NAME "_VIM_TEXT"
 # define VIMENC_ATOM_NAME "_VIMENC_TEXT"
 
+// These are used for the GTK4 GUI, since GTK4 only supports conforming mime
+// types, see gui_gtk4_cb.c for more information.
+# define VIM_MIMETYPE_NAME "application/x-vim-text"
+# define VIMENC_MIMETYPE_NAME "application/x-vim-enc-text"
+
 // Selection states for modeless selection
 # define SELECT_CLEARED		0
 # define SELECT_IN_PROGRESS	1
@@ -2352,13 +2356,13 @@ typedef struct
     short_u	origin_end_col;
     short_u	word_start_col;
     short_u	word_end_col;
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     // limits for selection inside a popup window
     short_u	min_col;
     short_u	max_col;
     short_u	min_row;
     short_u	max_row;
-#endif
+# endif
 
     pos_T	prev;		// Previous position
     short_u	state;		// Current selection state
@@ -2368,7 +2372,7 @@ typedef struct
     Atom	sel_atom;	// PRIMARY/CLIPBOARD selection ID
 # endif
 
-# ifdef FEAT_GUI_GTK
+# if defined(FEAT_GUI_GTK) && !defined(USE_GTK4)
     GdkAtom     gtk_sel_atom;	// PRIMARY/CLIPBOARD selection ID
 # endif
 
@@ -2448,6 +2452,19 @@ typedef enum {
     ESTACK_STACK,
     ESTACK_SCRIPT,
 } estack_arg_T;
+
+// For temporarily backward compatibility, to be removed soon.
+#define ENABLE_STL_MODE_MULTI_NL
+
+// Argument for build_stl_str_hl_local().
+typedef enum {
+    STL_MODE_SINGLE,	    // Does not accept line breaks "%@"
+    STL_MODE_MULTI,	    // Accept line breaks "%@"
+    STL_MODE_GET_RENDERED_HEIGHT,   // Just get stl rendered height
+#ifdef ENABLE_STL_MODE_MULTI_NL
+    STL_MODE_MULTI_NL,	    // Accept line breaks "%@" and "\n"
+#endif
+} stl_mode_T;
 
 // Return value of match_keyprotocol()
 typedef enum {
@@ -2536,7 +2553,7 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 # define USE_MCH_ERRMSG
 #endif
 
-# if defined(FEAT_EVAL) \
+#if defined(FEAT_EVAL) \
 	&& (!defined(FEAT_GUI_MSWIN) || !defined(FEAT_MBYTE_IME))
 // Whether IME is supported by im_get_status() defined in mbyte.c.
 // For Win32 GUI it's in gui_w32.c when FEAT_MBYTE_IME is defined.
@@ -2599,21 +2616,21 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 
 #ifdef _MSC_VER
 // Avoid useless warning "conversion from X to Y of greater size".
- #pragma warning(disable : 4312)
+# pragma warning(disable : 4312)
 // Avoid warning for old style function declarators
- #pragma warning(disable : 4131)
+# pragma warning(disable : 4131)
 // Avoid warning for conversion to type with smaller range
- #pragma warning(disable : 4244)
+# pragma warning(disable : 4244)
 // Avoid warning for conversion to larger size
- #pragma warning(disable : 4306)
+# pragma warning(disable : 4306)
 // Avoid warning for unreferenced formal parameter
- #pragma warning(disable : 4100)
+# pragma warning(disable : 4100)
 // Avoid warning for differs in indirection to slightly different base type
- #pragma warning(disable : 4057)
+# pragma warning(disable : 4057)
 // Avoid warning for constant conditional expression
- #pragma warning(disable : 4127)
+# pragma warning(disable : 4127)
 // Avoid warning for assignment within conditional
- #pragma warning(disable : 4706)
+# pragma warning(disable : 4706)
 #endif
 
 // Note: a NULL argument for vim_realloc() is not portable, don't use it.
@@ -2682,16 +2699,16 @@ typedef int (*opt_expand_cb_T)(optexpand_T *args, int *numMatches, char_u ***mat
 # else
 #  define X_DISPLAY	(gui.in_use ? gui.dpy : xterm_dpy)
 # endif
-#else
-# ifdef FEAT_GUI
-#  ifdef FEAT_GUI_GTK
-#   define X_DISPLAY	((gui.in_use) ? gui_mch_get_display() : (Display *)NULL)
-#  else
-#   define X_DISPLAY	gui.dpy
-#  endif
+#elif defined(FEAT_GUI)
+# ifdef FEAT_GUI_GTK
+#  define X_DISPLAY	((gui.in_use) ? gui_mch_get_display() : (Display *)NULL)
 # else
-#  define X_DISPLAY	xterm_dpy
+#  define X_DISPLAY	gui.dpy
 # endif
+#elif defined(FEAT_XCLIPBOARD)
+# define X_DISPLAY	xterm_dpy
+#else
+# define X_DISPLAY	(Display *)NULL
 #endif
 
 #ifdef FEAT_GUI_GTK
@@ -3076,6 +3093,10 @@ long elapsed(DWORD start_tick);
 #define UC_BUFFER	1	// -buffer: local to current buffer
 #define UC_VIM9		2	// {} argument: Vim9 syntax.
 
+// flags for the -completeopt= attribute of :command
+#define UCC_ESCAPE	0x1	// escape spaces, tabs and backslashes in
+				// matches
+
 // flags used by vim_strsave_fnameescape()
 #define VSE_NONE	0
 #define VSE_SHELL	1	// escape for a shell command
@@ -3091,5 +3112,21 @@ long elapsed(DWORD start_tick);
 #define CF_CLASS	1	// inside a class
 #define CF_INTERFACE	2	// inside an interface
 #define CF_ABSTRACT_METHOD	4	// inside an abstract class
+
+// Flags used by getvcol()
+#define GETVCOL_END_EXCL_LBR	1
+
+// Used by expand_env_esc() callers that feed the result to
+// wildcard expansion, so that such characters embedded in
+// environment variable values are treated as literal.
+#ifdef VMS
+# define PATH_ESC_WILDCARDS	"*?%"
+#else
+# ifdef MSWIN
+#  define PATH_ESC_WILDCARDS	"*?["
+# else
+#  define PATH_ESC_WILDCARDS	"*?[{"
+# endif
+#endif
 
 #endif // VIM__H

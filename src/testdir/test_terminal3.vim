@@ -1039,6 +1039,29 @@ func Test_terminal_visual_empty_listchars()
   call StopVimInTerminal(buf)
 endfunc
 
+func Test_terminal_normal_mode_colored_empty_line()
+  CheckScreendump
+  CheckRunVimInTerminal
+  CheckUnix
+
+  " Erase lines with a gray background (CSI 100m) using CSI K.  The empty lines
+  " around "old" must stay gray in Terminal-Normal mode too, not only while the
+  " job is running.
+  call writefile(["printf '\\033[100m\\033[K\\nold\\033[K\\n\\033[K\\033[0m\\n'"],
+	\ 'Xterm_colored.sh', 'D')
+  call writefile([':term sh ./Xterm_colored.sh'], 'XtermColored', 'D')
+  let buf = RunVimInTerminal('-S XtermColored', #{rows: 10})
+  call term_wait(buf)
+  call VerifyScreenDump(buf, 'Test_terminal_colored_empty_1', {})
+
+  " Enter Terminal-Normal mode: the empty lines must still be gray.
+  call term_sendkeys(buf, "\<C-W>N")
+  call term_wait(buf)
+  call VerifyScreenDump(buf, 'Test_terminal_colored_empty_2', {})
+
+  call StopVimInTerminal(buf)
+endfunc
+
 func Test_terminal_ansi_color_windows_cui()
   if !has('win32') || has('gui_running')
     throw 'Skipped: only for the Windows CUI'
@@ -1122,6 +1145,199 @@ func Test_terminal_backspace_on_windows()
 
   delfunc s:get_cmd_prompt
   let $PROMPT = save_prompt
+endfunc
+
+func Test_terminal_split_utf8()
+  CheckUnix
+
+  let buf = term_start('cat', {})
+  let chan = buf->term_getjob()->job_getchannel()
+  call ch_sendraw(chan, "1: \xc3")
+  call WaitForAssert({-> assert_equal('1: ', term_getline(buf, 1))})
+  call ch_sendraw(chan, "\xa5\xcc\xb2\n")
+  call WaitForAssert({-> assert_equal('1: å̲', term_getline(buf, 1))})
+  call WaitForAssert({-> assert_equal('1: å̲', term_getline(buf, 2))})
+  call ch_sendraw(chan, "2: \xc3\xa5")
+  call WaitForAssert({-> assert_equal('2: å', term_getline(buf, 3))})
+  call ch_sendraw(chan, "\xcc\xb2\n")
+  call WaitForAssert({-> assert_equal('2: å̲', term_getline(buf, 3))})
+  call WaitForAssert({-> assert_equal('2: å̲', term_getline(buf, 4))})
+  call ch_sendraw(chan, "3: \xc3\xa5\xcc")
+  call WaitForAssert({-> assert_equal('3: å', term_getline(buf, 5))})
+  call ch_sendraw(chan, "\xb2\n")
+  call WaitForAssert({-> assert_equal('3: å̲', term_getline(buf, 5))})
+  call WaitForAssert({-> assert_equal('3: å̲', term_getline(buf, 6))})
+
+  exe buf .. "bwipe!"
+endfunc
+
+func Test_terminal_max_combining_chars()
+  " somehow doesn't work on MS-Windows
+  CheckUnix
+  let cmd = "cat samples/terminal_max_combining_chars.txt\<CR>"
+  let buf = Run_shell_in_terminal({'term_rows': 15, 'term_cols': 35})
+  call TermWait(buf)
+  call term_sendkeys(buf, cmd)
+  " last char is a space with many combining chars
+  call WaitForAssert({-> assert_match("AAAAAAAAAAAAAAAAAAAAAAAAAAAA.", term_getline(buf, 14))})
+
+  call term_sendkeys(buf, "exit\r")
+  exe buf . "bwipe!"
+endfunc
+
+func Test_term_getpos()
+  CheckRunVimInTerminal
+  CheckUnix
+  CheckExecutable seq
+  defer delete('XTest_getpos_result')
+
+  let lines =<< trim EOL
+     term ++curwin sh
+  EOL
+  call writefile(lines, 'XTest_getpos', 'D')
+  let buf = RunVimInTerminal('-S XTest_getpos', {'rows': 15})
+  call term_sendkeys(buf, "for i in `seq 1 30`; do echo line$i; done\<cr>")
+
+  call WaitForAssert({-> assert_match("line18", term_getline(buf, 1))})
+  call WaitForAssert({-> assert_match("line30", term_getline(buf, 13))})
+
+  call term_sendkeys(buf, "\<c-w>:let g:job_w0 = line('w0')\<cr>")
+  call term_sendkeys(buf, "\<c-w>:let g:job_wdollar = line('w$')\<cr>")
+  call term_sendkeys(buf, "\<c-w>:call writefile([string(g:job_w0), string(g:job_wdollar)], 'XTest_getpos_result')\<cr>")
+  call WaitForAssert({-> assert_true(filereadable('XTest_getpos_result'))})
+  call WaitForAssert({-> assert_equal(2, len(readfile('XTest_getpos_result')))})
+  let job_result = readfile('XTest_getpos_result')
+  " 15 - 1: statusline - 1: prompt line
+  call assert_equal(13, str2nr(job_result[1]) - str2nr(job_result[0]))
+  call assert_true(str2nr(job_result[0]) > 1)
+  call delete('XTest_getpos_result')
+
+  " switch to Terminal-Normal mode and record w0/w$
+  call term_sendkeys(buf, "\<c-w>N")
+  call term_sendkeys(buf, ":let g:w0 = line('w0')\<cr>")
+  call term_sendkeys(buf, ":let g:wdollar = line('w$')\<cr>")
+  call term_sendkeys(buf, ":call writefile([string(g:w0), string(g:wdollar)], 'XTest_getpos_result')\<cr>")
+
+  call WaitForAssert({-> assert_true(filereadable('XTest_getpos_result'))})
+  call WaitForAssert({-> assert_equal(2, len(readfile('XTest_getpos_result')))})
+  let result = readfile('XTest_getpos_result')
+  " 15 - 1: statusline - 1: for prompt line
+  call assert_equal(13, str2nr(result[1]) - str2nr(result[0]))
+  call assert_true(str2nr(result[0]) > 1)
+
+  " Regression: line('w0') and line('w$') must not move cursor position
+  call term_sendkeys(buf, "gg")
+  call term_sendkeys(buf, ":call line('w0')\<cr>")
+  call term_sendkeys(buf, ":call line('w$')\<cr>")
+  call term_wait(buf)
+  call WaitForAssert({-> assert_match("for i in", term_getline(buf, 1))})
+  call WaitForAssert({-> assert_match("line12", term_getline(buf, 13))})
+
+  call StopVimInTerminal(buf)
+  " this crashed
+  new
+  setl buftype=terminal
+  call assert_equal(2, line('w0') + line('w$'))
+  bw
+endfunc
+
+func Test_term_autowrite()
+  set autowrite
+  new termautowritetestfile
+  call setline(1, 'test content')
+  term echo "test"
+  call assert_equal(['test content'], readfile('termautowritetestfile'))
+  call delete('termautowritetestfile')
+  bwipe!
+  set noautowrite
+endfunc
+
+" Test that CSI sequences with more than CSI_ARGS_MAX arguments do not crash
+func Test_terminal_csi_args_overflow()
+  CheckExecutable printf
+  let seq = "\033[" .. repeat('1;', 49) .. '1m'
+  let seq ..= "\033[1111111111111111111m"
+  let buf = term_start([&shell, &shellcmdflag, 'printf "' .. seq .. '"'])
+
+  " If we get here without a crash, the fix works
+  call assert_equal('running', term_getstatus(buf))
+  call StopVimInTerminal(buf)
+endfunc
+
+func Test_terminal_output_combining_chars()
+  CheckUnix
+  new
+  let cmd = "cat samples/combining_chars.txt"
+  let buf = term_start(cmd, {'curwin': 1, 'term_finish': 'open', 'term_rows': 10, 'term_cols': 30})
+  call WaitForAssert({-> assert_match('finished', term_getstatus(buf))})
+  call TermWait(buf)
+  let lines = getbufline(buf, 1, '$')
+  " get byte lengths to confirm combining chars present
+  let lens = map(copy(lines), 'len(v:val)')
+  let expected = repeat([11], 190) + repeat([14], 10)
+  call assert_equal(expected, lens)
+  bw!
+endfunc
+
+" This caused a Crash
+func Test_terminal_csi_resize_oob()
+  return
+  CheckUnix
+  CheckExecutable printf
+
+  " CSI 8 ; rows ; cols t with missing, zero or negative dimensions reached
+  " on_resize()/resize_buffer() unvalidated, causing a negative-size memmove()
+  " and out-of-bounds set_lineinfo()/DECALN accesses in libvterm.  Rendering
+  " these must not crash Vim.
+
+  " Sequences:
+  " 1 resize_buffer negative-size memmove
+  " 2 set_lineinfo OOB after corrupt resize
+  " 3 DECALN putglyph OOB after corrupt resize
+  let seqs = ["\<ESC>[8;0;t",
+        \ "\<ESC>[8;;t\<ESC>[J",
+        \ "\<ESC>[8;;0t\<ESC>#8"]
+
+  for seq in seqs
+    let buf = term_start([&shell, &shellcmdflag, 'printf "%s" ' .. shellescape(seq)],
+          \ #{term_rows: 10, term_cols: 40})
+    call TermWait(buf)
+    " Getting here without a crash (and no ASAN report) is the test.
+    call assert_true(bufexists(buf))
+    exe 'bwipe! ' .. buf
+  endfor
+endfunc
+
+" This caused a Crash, but Vim builds libvterm using -DWCWIDTH_FUNCTION=utf_uint2cells
+" which wouldn't return -1 and therefore does not reproduce here
+func Test_terminal_negative_col_oob()
+  CheckUnix
+  CheckExecutable printf
+
+  " A wcwidth() == -1 codepoint (U+0087, \302\207 in UTF-8) drove
+  " state->pos.col negative, then used as an array index in the tabstop
+  " helpers and moverect_internal().  These are single-byte / single-bit
+  " out-of-bounds accesses that do not crash a normal build, so this test
+  " is only meaningful under a sanitizer build; otherwise it just confirms
+  " Vim does not crash.
+
+  " Sequences:
+  " 1. clear_col_tabstop OOB read
+  " 2. is_col_tabstop OOB read
+  " 3. set_col_tabstop OOB write (HTS)
+  " 4. moverect_internal memmove (insert mode)
+
+  let seqs = ["\302\207\<ESC>[g",
+        \ "\302\207\302\207\t",
+        \ "\302\207\<ESC>H",
+        \ "\<ESC>[4h\302\2070"]
+  for seq in seqs
+    let buf = term_start([&shell, &shellcmdflag, 'printf "%s" ' .. shellescape(seq)],
+          \ #{term_rows: 10, term_cols: 40})
+    call TermWait(buf)
+    call assert_true(bufexists(buf))
+    exe 'bwipe! ' .. buf
+  endfor
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

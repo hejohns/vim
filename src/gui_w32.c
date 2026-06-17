@@ -25,6 +25,10 @@
 
 #include "vim.h"
 
+#if defined(FEAT_IMAGE_GDI)
+void update_popup_images_rect(int left, int top, int right, int bottom);
+#endif
+
 #if defined(FEAT_DIRECTX)
 # include "gui_dwrite.h"
 #endif
@@ -145,7 +149,6 @@ gui_mch_set_rendering_options(char_u *s)
     int	    dx_geom = 0;
     int	    dx_renmode = 0;
     int	    dx_taamode = 0;
-
     // parse string as rendering options.
     for (p = s; p != NULL && *p != NUL; )
     {
@@ -242,6 +245,7 @@ gui_mch_set_rendering_options(char_u *s)
 	}
     }
     s_directx_enabled = dx_enable;
+    gui.directx_enabled = IS_ENABLE_DIRECTX();
 
     return OK;
 # else
@@ -1572,7 +1576,7 @@ dyn_dwm_load(void)
     }
 }
 
-extern BOOL win11_or_later; // this is in os_win32.c
+extern DWORD win_version; // this is in os_mswin.c
 
 /*
  * Set TitleBar's color. Handle hl-TitleBar and hl-TitleBarNC.
@@ -1584,11 +1588,12 @@ extern BOOL win11_or_later; // this is in os_win32.c
     void
 gui_mch_set_titlebar_colors(void)
 {
-    if (pDwmSetWindowAttribute == NULL || !win11_or_later)
+#define DWMWA_COLOR_DEFAULT 0xFFFFFFFF
+    if (pDwmSetWindowAttribute == NULL || win_version < MAKE_VER(10, 0, 22000))
 	return;
 
-    guicolor_T captionColor = 0xFFFFFFFF;
-    guicolor_T textColor = 0xFFFFFFFF;
+    guicolor_T captionColor = DWMWA_COLOR_DEFAULT;
+    guicolor_T textColor = DWMWA_COLOR_DEFAULT;
 
     if (vim_strchr(p_go, GO_TITLEBAR) != NULL)
     {
@@ -1604,9 +1609,9 @@ gui_mch_set_titlebar_colors(void)
 	}
 
 	if (captionColor == INVALCOLOR)
-	    captionColor = 0xFFFFFFFF;
+	    captionColor = DWMWA_COLOR_DEFAULT;
 	if (textColor == INVALCOLOR)
-	    textColor = 0xFFFFFFFF;
+	    textColor = DWMWA_COLOR_DEFAULT;
     }
 
     pDwmSetWindowAttribute(s_hwnd, DWMWA_CAPTION_COLOR,
@@ -2727,6 +2732,207 @@ gui_mch_clear_block(
     clear_rect(&rc);
 }
 
+#ifdef FEAT_IMAGE_GDI
+/*
+ * Convert the popup's RGB(A) pixel buffer into a 32-bit BGRX buffer.
+ * "dst" must be large enough for iw * ih * 4 bytes.  When has_alpha is
+ * true, the source has 4 bytes per pixel and the alpha channel is
+ * flattened onto the GUI window background colour (pre-multiplied blend).
+ */
+    static bool
+upload_popup_image_pixels(char_u *dst, char_u *src, int iw, int ih,
+								bool has_alpha)
+{
+    int		y, x;
+    int		stride = iw * 4;
+    int		src_bpp = has_alpha ? 4 : 3;
+    COLORREF	bg = has_alpha ? gui_mch_get_rgb(gui.back_pixel) : 0;
+    int		bg_r = GetRValue(bg);
+    int		bg_g = GetGValue(bg);
+    int		bg_b = GetBValue(bg);
+
+    if (dst == NULL || src == NULL || iw <= 0 || ih <= 0)
+	return false;
+
+    for (y = 0; y < ih; y++)
+    {
+	char_u *s = src + (size_t)y * iw * src_bpp;
+	char_u *d = dst + (size_t)y * stride;
+
+	for (x = 0; x < iw; x++)
+	{
+	    if (has_alpha)
+	    {
+		int a = s[3];
+
+		if (a == 255)
+		{
+		    d[0] = s[2];
+		    d[1] = s[1];
+		    d[2] = s[0];
+		}
+		else if (a == 0)
+		{
+		    d[0] = (char_u)bg_b;
+		    d[1] = (char_u)bg_g;
+		    d[2] = (char_u)bg_r;
+		}
+		else
+		{
+		    d[0] = (char_u)((s[2] * a + bg_b * (255 - a)) / 255);
+		    d[1] = (char_u)((s[1] * a + bg_g * (255 - a)) / 255);
+		    d[2] = (char_u)((s[0] * a + bg_r * (255 - a)) / 255);
+		}
+	    }
+	    else
+	    {
+		d[0] = s[2];	// B
+		d[1] = s[1];	// G
+		d[2] = s[0];	// R
+	    }
+	    d[3] = 0;
+	    s += src_bpp;
+	    d += 4;
+	}
+    }
+    return true;
+}
+
+/*
+ * Build a top-down 32-bit DIB section for the popup's RGB buffer and cache
+ * both the bitmap and a memory DC on the window for fast BitBlt redraws.
+ */
+    static bool
+build_popup_image_hbitmap(win_T *wp)
+{
+    int		iw = wp->w_popup_image_w;
+    int		ih = wp->w_popup_image_h;
+    char_u	*src = wp->w_popup_image_data;
+    BITMAPINFO	bmi;
+    HBITMAP	hbm;
+    HDC		mem_dc;
+    void	*bits = NULL;
+
+    if (src == NULL || iw <= 0 || ih <= 0 || s_hdc == NULL)
+	return false;
+
+    CLEAR_FIELD(bmi);
+    bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth = iw;
+    bmi.bmiHeader.biHeight = -ih;	// top-down
+    bmi.bmiHeader.biPlanes = 1;
+    bmi.bmiHeader.biBitCount = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    hbm = CreateDIBSection(s_hdc, &bmi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (hbm == NULL)
+	return false;
+
+    mem_dc = CreateCompatibleDC(s_hdc);
+    if (mem_dc == NULL)
+    {
+	DeleteObject(hbm);
+	return false;
+    }
+
+    SelectObject(mem_dc, hbm);
+    if (!upload_popup_image_pixels((char_u *)bits, src, iw, ih,
+						    wp->w_popup_image_alpha))
+    {
+	DeleteDC(mem_dc);
+	DeleteObject(hbm);
+	return false;
+    }
+
+    wp->w_popup_image_hbitmap = (void *)hbm;
+    wp->w_popup_image_hdc = (void *)mem_dc;
+    wp->w_popup_image_bits = bits;
+    return true;
+}
+
+/*
+ * Release any HBITMAP cached on this popup window.
+ */
+    void
+gui_mch_free_popup_image(win_T *wp)
+{
+    if (wp->w_popup_image_hdc != NULL)
+    {
+	DeleteDC((HDC)wp->w_popup_image_hdc);
+	wp->w_popup_image_hdc = NULL;
+    }
+    if (wp->w_popup_image_hbitmap != NULL)
+    {
+	DeleteObject((HBITMAP)wp->w_popup_image_hbitmap);
+	wp->w_popup_image_hbitmap = NULL;
+    }
+    wp->w_popup_image_bits = NULL;
+}
+
+    bool
+gui_mch_update_popup_image_pixels(win_T *wp)
+{
+    if (wp->w_popup_image_hbitmap == NULL
+	    || wp->w_popup_image_bits == NULL
+	    || wp->w_popup_image_data == NULL)
+	return false;
+
+    return upload_popup_image_pixels((char_u *)wp->w_popup_image_bits,
+	    wp->w_popup_image_data,
+	    wp->w_popup_image_w, wp->w_popup_image_h,
+	    wp->w_popup_image_alpha);
+}
+
+/*
+ * Paint the popup image cached in "wp" onto the GUI canvas.
+ * (row, col) is the top-left text cell of the image area inside the popup
+ * (i.e. inside borders and padding).  The image is drawn at native pixel
+ * size starting at FILL_X(col), FILL_Y(row); the popup auto-sizes itself
+ * to a cell box that fully encloses the image, so any leftover slack is
+ * already filled by the popup background.
+ *
+ * The DIB section is built once on first paint and BitBlt'd thereafter.
+ */
+    void
+gui_mch_draw_popup_image(
+	win_T	*wp,
+	int	 row,
+	int	 col,
+	int	 src_x,
+	int	 src_y,
+	int	 draw_w,
+	int	 draw_h)
+{
+    if (wp->w_popup_image_data == NULL || s_hdc == NULL
+	    || wp->w_popup_image_w <= 0 || wp->w_popup_image_h <= 0
+	    || draw_w <= 0 || draw_h <= 0)
+	return;
+
+    if (wp->w_popup_image_hbitmap == NULL
+	    && !build_popup_image_hbitmap(wp))
+	return;
+
+# if defined(FEAT_DIRECTX)
+    // Commit any pending DirectWrite output so popup text and borders are on
+    // s_hdc before we blit on top.
+    if (IS_ENABLE_DIRECTX())
+	DWriteContext_Flush(s_dwc);
+# endif
+
+    if (wp->w_popup_image_hdc == NULL)
+	return;
+
+    // BitBlt only the visible sub-rect: src offset (src_x, src_y) into the
+    // cached DIB, size (draw_w, draw_h) pixels.  The caller (popupwin.c)
+    // computes these from popup_compute_clip() so a "clipwindow" popup that
+    // overhangs its host window does not paint past the host's content edge.
+    BitBlt(s_hdc,
+	    FILL_X(col), FILL_Y(row),
+	    draw_w, draw_h,
+	    (HDC)wp->w_popup_image_hdc, src_x, src_y, SRCCOPY);
+}
+#endif
+
 /*
  * Clear the whole text window.
  */
@@ -3131,22 +3337,17 @@ gui_mch_set_curtab(int nr)
 #endif
 
 #ifdef FEAT_GUI_DARKTHEME
-extern BOOL win10_22H2_or_later; // this is in os_win32.c
-
     void
 gui_mch_set_dark_theme(int dark)
 {
-    if (!win10_22H2_or_later)
-	return;
-
-    if (pDwmSetWindowAttribute != NULL)
+    if (pDwmSetWindowAttribute != NULL && win_version >= MAKE_VER(10, 0, 18985))
 	pDwmSetWindowAttribute(s_hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &dark,
 		sizeof(dark));
 
-    if (pSetPreferredAppMode != NULL)
+    if (pSetPreferredAppMode != NULL && win_version >= MAKE_VER(10, 0, 18362))
 	pSetPreferredAppMode(dark);
 
-    if (pFlushMenuThemes != NULL)
+    if (pFlushMenuThemes != NULL && win_version >= MAKE_VER(10, 0, 18362))
 	pFlushMenuThemes();
 }
 
@@ -3472,6 +3673,10 @@ _OnPaint(
 	gui_redraw(ps.rcPaint.left, ps.rcPaint.top,
 		ps.rcPaint.right - ps.rcPaint.left + 1,
 		ps.rcPaint.bottom - ps.rcPaint.top + 1);
+#if defined(FEAT_IMAGE_GDI)
+	update_popup_images_rect(ps.rcPaint.left, ps.rcPaint.top,
+		ps.rcPaint.right, ps.rcPaint.bottom);
+#endif
     }
 
     EndPaint(hwnd, &ps);
@@ -3735,7 +3940,7 @@ gui_mch_delete_lines(
     // scrolling such that the cursor ends up in the top-left character on
     // the screen...   But why?  (Webb)
     // It's probably fixed by disabling drawing the cursor while scrolling.
-    // gui.cursor_is_valid = FALSE;
+    // gui.cursor_is_valid = false;
 
     gui_clear_block(gui.scroll_region_bot - num_lines + 1,
 						       gui.scroll_region_left,
@@ -3958,6 +4163,60 @@ gui_mch_init_font(char_u *font_name, int fontset UNUSED)
     }
     if (font == NOFONT)
 	return FAIL;
+
+#if defined(FEAT_DIRECTX)
+    // Parse font features from guifont (e.g., ":fss19=1:fcalt=0:fliga=1").
+    {
+	DWriteFontFeature features[DWRITE_MAX_FONT_FEATURES];
+	int		    feat_count = 0;
+	char_u		    *fp;
+
+	if (font_name != NULL)
+	{
+	    // Find each ":f" option in font_name.
+	    for (fp = font_name; *fp != NUL; fp++)
+	    {
+		if (*fp == ':' && *(fp + 1) == 'f')
+		{
+		    char_u tag[5];
+		    int    ti = 0;
+		    unsigned int param = 1;
+
+		    fp += 2;  // skip ":f"
+		    while (*fp != NUL && *fp != '=' && *fp != ':'
+			    && ti < 4)
+			tag[ti++] = *fp++;
+		    tag[ti] = NUL;
+
+		    if (ti != 4)
+			continue;  // invalid tag length
+
+		    if (*fp == '=')
+		    {
+			fp++;
+			param = (unsigned int)atoi((char *)fp);
+			while (*fp >= '0' && *fp <= '9')
+			    fp++;
+		    }
+
+		    if (feat_count < DWRITE_MAX_FONT_FEATURES)
+		    {
+			features[feat_count].tag =
+			    ((unsigned int)tag[0])
+			    | ((unsigned int)tag[1] << 8)
+			    | ((unsigned int)tag[2] << 16)
+			    | ((unsigned int)tag[3] << 24);
+			features[feat_count].parameter = param;
+			feat_count++;
+		    }
+
+		    fp--;  // adjust for loop increment
+		}
+	    }
+	}
+	DWriteContext_SetFontFeatures(s_dwc, features, feat_count);
+    }
+#endif
 
     if (font_name == NULL)
 	font_name = (char_u *)"";
@@ -4742,7 +5001,6 @@ _OnMouseWheel(HWND hwnd UNUSED, WPARAM wParam, LPARAM lParam, int horizontal)
 	update_screen(0);
 	setcursor();
 	out_flush();
-	return;
     }
 #endif
 
@@ -6671,6 +6929,16 @@ gui_mch_draw_string(
 	    pcliprect = &rc;
 	    foptions = ETO_CLIPPED;
 	}
+#ifdef FEAT_DIRECTX
+	// DirectWrite anti-aliasing can extend glyph pixels beyond cell
+	// boundaries, leaving artifacts when adjacent cells are not
+	// redrawn.  Clip to the cell rect to prevent this.
+	else if (IS_ENABLE_DIRECTX())
+	{
+	    pcliprect = &rc;
+	    foptions = ETO_CLIPPED;
+	}
+#endif
     }
     SetTextColor(s_hdc, gui.currFgColor);
     SelectFont(s_hdc, gui.currFont);
@@ -8186,7 +8454,7 @@ gui_mch_tearoff(
     if (submenuWidth != 0)
     {
 	submenuWidth = GetTextWidth(hdc, (char_u *)TEAROFF_SUBMENU_LABEL,
-					  (int)STRLEN(TEAROFF_SUBMENU_LABEL));
+				  (int)STRLEN_LITERAL(TEAROFF_SUBMENU_LABEL));
 	textWidth += submenuWidth;
     }
     dlgwidth = GetTextWidthEnc(hdc, title, (int)STRLEN(title));
@@ -8309,7 +8577,7 @@ gui_mch_tearoff(
 	}
 	else
 	{
-	    len += (int)STRLEN(TEAROFF_SUBMENU_LABEL);
+	    len += (int)STRLEN_LITERAL(TEAROFF_SUBMENU_LABEL);
 	    menuID = (WORD)((long_u)(menu->submenu_id) | (DWORD)0x8000);
 	}
 
@@ -8334,7 +8602,7 @@ gui_mch_tearoff(
 	if (menu->children != NULL)
 	{
 	    STRCPY(text, TEAROFF_SUBMENU_LABEL);
-	    text += STRLEN(TEAROFF_SUBMENU_LABEL);
+	    text += STRLEN_LITERAL(TEAROFF_SUBMENU_LABEL);
 	}
 	else
 	{

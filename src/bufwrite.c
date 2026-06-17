@@ -601,11 +601,7 @@ set_file_time(
     tvp[0].tv_usec  = 0;
     tvp[1].tv_sec   = mtime;
     tvp[1].tv_usec  = 0;
-#   ifdef NeXT
-    (void)utimes((char *)fname, tvp);
-#   else
     (void)utimes((char *)fname, (const struct timeval *)&tvp);
-#   endif
 #  endif
 # endif
 }
@@ -1164,7 +1160,7 @@ buf_write(
     got_int = FALSE;
 
     // Mark the buffer as 'being saved' to prevent changed buffer warnings
-    buf->b_saving = TRUE;
+    buf->b_saving = true;
 
     // If we are not appending or filtering, the file exists, and the
     // 'writebackup', 'backup' or 'patchmode' option is set, need a backup.
@@ -1318,14 +1314,11 @@ buf_write(
 		&& (fd = mch_open((char *)fname, O_RDONLY | O_EXTRA, 0)) >= 0)
 	{
 	    int		bfd;
-	    char_u	*copybuf, *wp;
+	    char_u	*copybuf;
 	    int		some_error = FALSE;
 	    stat_T	st_new;
 	    char_u	*dirp;
 	    char_u	*rootname;
-#if defined(UNIX) || defined(MSWIN)
-	    char_u      *p;
-#endif
 #if defined(UNIX)
 	    int		did_set_shortname;
 	    mode_t	umask_save;
@@ -1351,6 +1344,9 @@ buf_write(
 	    dirp = p_bdir;
 	    while (*dirp)
 	    {
+		char_u	*p UNUSED;
+		int	copybuf_len UNUSED;
+
 #ifdef UNIX
 		st_new.st_ino = 0;
 		st_new.st_dev = 0;
@@ -1358,10 +1354,10 @@ buf_write(
 #endif
 
 		// Isolate one directory name, using an entry in 'bdir'.
-		(void)copy_option_part(&dirp, copybuf, WRITEBUFSIZE, ",");
+		copybuf_len = copy_option_part(&dirp, copybuf, WRITEBUFSIZE, ",");
 
 #if defined(UNIX) || defined(MSWIN)
-		p = copybuf + STRLEN(copybuf);
+		p = copybuf + copybuf_len;
 		if (after_pathsep(copybuf, p) && p[-1] == p[-2])
 		    // Ends with '//', use full path
 		    if ((p = make_percent_swname(copybuf, p, fname)) != NULL)
@@ -1411,13 +1407,13 @@ buf_write(
 			    // may try again with 'shortname' set
 			    if (!(buf->b_shortname || buf->b_p_sn))
 			    {
-				buf->b_shortname = TRUE;
+				buf->b_shortname = true;
 				did_set_shortname = TRUE;
 				continue;
 			    }
 				// setting shortname didn't help
 			    if (did_set_shortname)
-				buf->b_shortname = FALSE;
+				buf->b_shortname = false;
 			    break;
 			}
 #endif
@@ -1427,6 +1423,8 @@ buf_write(
 			// Change one character, just before the extension.
 			if (!p_bk)
 			{
+			    char_u	*wp;
+
 			    wp = backup + STRLEN(backup) - 1
 							 - STRLEN(backup_ext);
 			    if (wp < backup)	// empty file name ???
@@ -1571,11 +1569,13 @@ buf_write(
 	    dirp = p_bdir;
 	    while (*dirp)
 	    {
+		int IObufflen UNUSED;
+
 		// Isolate one directory name and make the backup file name.
-		(void)copy_option_part(&dirp, IObuff, IOSIZE, ",");
+		IObufflen = copy_option_part(&dirp, IObuff, IOSIZE, ",");
 
 #if defined(UNIX) || defined(MSWIN)
-		p = IObuff + STRLEN(IObuff);
+		p = IObuff + IObufflen;
 		if (after_pathsep(IObuff, p) && p[-1] == p[-2])
 		    // path ends with '//', use full path
 		    if ((p = make_percent_swname(IObuff, p, fname)) != NULL)
@@ -1783,10 +1783,10 @@ buf_write(
     if (converted && wb_flags == 0
 #ifdef USE_ICONV
 	    && write_info.bw_iconv_fd == (iconv_t)-1
-# endif
-# ifdef FEAT_EVAL
+#endif
+#ifdef FEAT_EVAL
 	    && wfname == fname
-# endif
+#endif
 	    )
     {
 	if (!forceit)
@@ -2068,7 +2068,7 @@ restore_backup:
 			&& *buf->b_p_key != NUL && !filtering
 			&& *ptr == NUL)
 		    write_info.bw_finish = TRUE;
- #endif
+#endif
 		if (buf_write_bytes(&write_info) == FAIL)
 		{
 		    end = 0;		// write error: break loop
@@ -2177,7 +2177,7 @@ restore_backup:
 		    && (write_info.bw_flags & FIO_ENCRYPTED)
 		    && *buf->b_p_key != NUL && !filtering)
 		write_info.bw_finish = TRUE;
- #endif
+#endif
 	    if (buf_write_bytes(&write_info) == FAIL)
 		end = 0;		    // write error
 	    nchars += len;
@@ -2223,12 +2223,12 @@ restore_backup:
 	// Probably need to set the security context.
 	if (!backup_copy)
 	{
-#if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
+# if defined(HAVE_SELINUX) || defined(HAVE_SMACK)
 	    mch_copy_sec(backup, wfname);
-#endif
-#ifdef FEAT_XATTR
+# endif
+# ifdef FEAT_XATTR
 	    mch_copy_xattr(backup, wfname);
-#endif
+# endif
 	}
 #endif
 
@@ -2543,7 +2543,7 @@ fail:
 nofail:
 
     // Done saving, we accept changed buffer warnings again
-    buf->b_saving = FALSE;
+    buf->b_saving = false;
 
     vim_free(backup);
     if (buffer != smallbuf)
@@ -2661,7 +2661,7 @@ nofail:
 #ifdef FEAT_VIMINFO
     // Make sure marks will be written out to the viminfo file later, even when
     // the file is new.
-    curbuf->b_marks_read = TRUE;
+    curbuf->b_marks_read = true;
 #endif
 
     got_int |= prev_got_int;

@@ -76,7 +76,7 @@
 # if RUBY_VERSION >= 20
 // USE_TYPEDDATA is not defined yet. We just check for 2.0.
 #  define rb_check_typeddata		rb_check_typeddata_stub
-#endif
+# endif
 
 # if RUBY_VERSION == 21
 // Ruby 2.1 adds new GC called RGenGC and RARRAY_PTR uses
@@ -178,6 +178,9 @@
 
 #ifdef HAVE_DUP
 # undef HAVE_DUP
+#endif
+#ifdef HAVE_FSYNC
+# undef HAVE_FSYNC
 #endif
 
 // Avoid redefining TRUE/FALSE in vterm.h.
@@ -1689,7 +1692,7 @@ window_set_cursor(VALUE self, VALUE pos)
     col = RARRAY_PTR(pos)[1];
     win->w_cursor.lnum = NUM2LONG(lnum);
     win->w_cursor.col = NUM2UINT(col);
-    win->w_set_curswant = TRUE;
+    win->w_set_curswant = true;
     check_cursor();		    // put cursor on an existing line
     update_screen(UPD_NOT_VALID);
     return Qnil;

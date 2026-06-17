@@ -461,13 +461,14 @@ extends_check_dup_members(
     {
 	class_T	    *p_cl = extends_cl;
 	ocmember_T  *c_m = members + c_i;
-	char_u	    *pstr = (*c_m->ocm_name.string == '_')
-				    ? c_m->ocm_name.string + 1 : c_m->ocm_name.string;
+	bool	    c_protected = (*c_m->ocm_name.string == '_');
+	char_u	    *pstr = c_m->ocm_name.string + c_protected;
 
 	// Check in all the parent classes in the lineage
 	while (p_cl != NULL)
 	{
 	    int p_member_count = p_cl->class_obj_member_count;
+
 	    if (p_member_count == 0)
 	    {
 		p_cl = p_cl->class_extends;
@@ -478,12 +479,17 @@ extends_check_dup_members(
 	    // Compare against all the members in the parent class
 	    for (int p_i = 0; p_i < p_member_count; p_i++)
 	    {
-		ocmember_T	*p_m = p_members + p_i;
-		char_u	*qstr = (*p_m->ocm_name.string == '_')
-		    ? p_m->ocm_name.string + 1 : p_m->ocm_name.string;
+		ocmember_T  *p_m = p_members + p_i;
+		bool	    p_protected = (*p_m->ocm_name.string == '_');
+		char_u	    *qstr = p_m->ocm_name.string + p_protected;
 		if (STRCMP(pstr, qstr) == 0)
 		{
-		    semsg(_(e_duplicate_variable_str), c_m->ocm_name.string);
+		    if (c_protected != p_protected)
+			semsg(_(e_public_and_protected_member_have_same_name_str_str),
+				pstr, pstr);
+		    else
+			semsg(_(e_duplicate_variable_str),
+				c_m->ocm_name.string);
 		    return FALSE;
 		}
 	    }
@@ -918,7 +924,7 @@ add_interface_from_super_class(
 	return FALSE;
 
     if (ga_grow(impl_gap, 1) == FAIL)
-	return FALSE;
+	goto fail;
 
     char_u **intf_names = (char_u **)impl_gap->ga_data;
     intf_names[impl_gap->ga_len] = intf_name;
@@ -926,7 +932,10 @@ add_interface_from_super_class(
 
     // Add the interface class to "intf_classes_gap"
     if (ga_grow(intf_classes_gap, 1) == FAIL)
-	return FALSE;
+    {
+	--impl_gap->ga_len;
+	goto fail;
+    }
 
     class_T **intf_classes = (class_T **)intf_classes_gap->ga_data;
     intf_classes[intf_classes_gap->ga_len] = ifcl;
@@ -934,6 +943,9 @@ add_interface_from_super_class(
     ++ifcl->class_refcount;
 
     return TRUE;
+fail:
+    vim_free(intf_name);
+    return FALSE;
 }
 
 /*
@@ -1034,18 +1046,18 @@ is_duplicate_variable(
     char_u	*varname,
     char_u	*varname_end)
 {
-    string_T	pstr = {varname, (size_t)(varname_end - varname)};  // Note: the .string field may
-								    // point to a string longer
-								    // than the .length field.
-								    // So we need to use STRNCMP()
-								    // to compare it.
+    // Note: the .string field may point to a string longer than the .length
+    // field.  So we need to use STRNCMP() to compare it.
+    string_T	pstr = {varname, (size_t)(varname_end - varname)};
     int		dup = FALSE;
+    bool	p_protected = false;
 
     // Step over a leading '_'.
     if (*pstr.string == '_')
     {
 	pstr.string++;
 	pstr.length--;
+	p_protected = true;
     }
 
     // loop == 1: class variables, loop == 2: object variables
@@ -1056,12 +1068,14 @@ is_duplicate_variable(
 	{
 	    ocmember_T *m = ((ocmember_T *)vgap->ga_data) + i;
 	    string_T	qstr = {m->ocm_name.string, m->ocm_name.length};
+	    bool	q_protected = false;
 
 	    // Step over a leading '_'.
 	    if (*qstr.string == '_')
 	    {
 		qstr.string++;
 		qstr.length--;
+		q_protected = true;
 	    }
 
 	    if (pstr.length == qstr.length
@@ -1070,7 +1084,11 @@ is_duplicate_variable(
 		char_u	save_c = *varname_end;
 
 		*varname_end = NUL;
-		semsg(_(e_duplicate_variable_str), varname);
+		if (p_protected != q_protected)
+		    semsg(_(e_public_and_protected_member_have_same_name_str_str),
+					       pstr.string, pstr.string);
+		else
+		    semsg(_(e_duplicate_variable_str), varname);
 		*varname_end = save_c;
 		dup = TRUE;
 		break;
@@ -1458,7 +1476,7 @@ add_default_constructor(
     int		is_enum = IS_ENUM(cl);
 
     ga_init2(&fga, 1, 1000);
-    ga_concat_len(&fga, (char_u *)"new(", 4);
+    GA_CONCAT_LITERAL(&fga, "new(");
     for (int i = 0; i < cl->class_obj_member_count; ++i)
     {
 	if (i < 2 && is_enum)
@@ -1469,13 +1487,13 @@ add_default_constructor(
 	    continue;
 
 	if (i > (is_enum ? 2 : 0))
-	    ga_concat_len(&fga, (char_u *)", ", 2);
-	ga_concat_len(&fga, (char_u *)"this.", 5);
+	    GA_CONCAT_LITERAL(&fga, ", ");
+	GA_CONCAT_LITERAL(&fga, "this.");
 	ocmember_T *m = cl->class_obj_members + i;
 	ga_concat_len(&fga, (char_u *)m->ocm_name.string, m->ocm_name.length);
-	ga_concat_len(&fga, (char_u *)" = v:none", 9);
+	GA_CONCAT_LITERAL(&fga, " = v:none");
     }
-    ga_concat_len(&fga, (char_u *)")\nenddef\n", 9);	// Note: not 11!
+    GA_CONCAT_LITERAL(&fga, ")\nenddef\n");
     ga_append(&fga, NUL);
 
     exarg_T fea;
@@ -1826,18 +1844,18 @@ enum_add_values_member(
     int		rc = FAIL;
 
     ga_init2(&fga, 1, 1000);
-    ga_concat_len(&fga, (char_u *)"[", 1);
+    GA_CONCAT_LITERAL(&fga, "[");
     for (int i = 0; i < num_enum_values; ++i)
     {
 	ocmember_T *m = ((ocmember_T *)gap->ga_data) + i;
 
 	if (i > 0)
-	    ga_concat_len(&fga, (char_u *)", ", 2);
+	    GA_CONCAT_LITERAL(&fga, ", ");
 	ga_concat_len(&fga, en->class_name.string, en->class_name.length);
-	ga_concat_len(&fga, (char_u *)".", 1);
+	GA_CONCAT_LITERAL(&fga, ".");
 	ga_concat_len(&fga, (char_u *)m->ocm_name.string, m->ocm_name.length);
     }
-    ga_concat_len(&fga, (char_u *)"]", 1);
+    GA_CONCAT_LITERAL(&fga, "]");
     ga_append(&fga, NUL);
 
     char_u *varname = (char_u *)"values";
@@ -1894,6 +1912,13 @@ enum_set_internal_obj_vars(class_T *en, object_T *enval)
 	if (en_tv != NULL && en_tv->v_type == VAR_UNKNOWN)
 	    break;
     }
+
+    if (i >= en->class_class_member_count)
+	// When adding enum values to an enum, the index value should be less
+	// than the member count.  It will be greater only when appending a
+	// new item to a list of enums.  In this case, skip setting the enum
+	// name and ordinal (as this is a dummy enum object)
+	return;
 
     // First object variable is the name
     ocmember_T *value_ocm = en->class_class_members + i;
@@ -2205,10 +2230,14 @@ early_ret:
 	    fullen = 12;
 	}
 
+	// skip ':' and blanks
+	for (; VIM_ISWHITE(*p) || *p == ':'; ++p)
+	    ;
+	char_u *cmd_start = p;
 	if (checkforcmd(&p, end_name, shortlen))
 	{
-	    if (STRNCMP(line, end_name, fullen) != 0)
-		semsg(_(e_command_cannot_be_shortened_str), line);
+	    if (STRNCMP(cmd_start, end_name, fullen) != 0)
+		semsg(_(e_command_cannot_be_shortened_str), cmd_start);
 	    else if (*p == '|' || !ends_excmd2(line, p))
 		semsg(_(e_trailing_characters_str), p);
 	    else
@@ -3086,7 +3115,11 @@ call_oc_method(
     char_u *argp = name_end;
     int ret = get_func_arguments(&argp, evalarg, 0, argvars, &argcount, FALSE);
     if (ret == FAIL)
+    {
+	while (--argcount >= 0)
+	    clear_tv(&argvars[argcount]);
 	return FAIL;
+    }
 
     funcexe_T funcexe;
     CLEAR_FIELD(funcexe);
@@ -3631,6 +3664,36 @@ obj_lock_const_vars(object_T *obj)
 	    item_lock(mtv, DICT_MAXNEST, TRUE, TRUE);
 	}
     }
+}
+
+/*
+ * Create a new instance of class "cl"
+ */
+    object_T *
+alloc_object(class_T *cl)
+{
+    object_T	*obj;
+    int		sz;
+
+    if (cl == NULL)
+	return NULL;
+
+    sz = sizeof(object_T) + cl->class_obj_member_count * sizeof(typval_T);
+    obj = alloc_clear(sz);
+    if (obj == NULL)
+	return NULL;
+
+    obj->obj_class = cl;
+    ++cl->class_refcount;
+    obj->obj_refcount = 1;
+    object_created(obj);
+
+    // When creating an enum value object, initialize the name and ordinal
+    // object variables.
+    if (IS_ENUM(cl))
+	enum_set_internal_obj_vars(cl, obj);
+
+    return obj;
 }
 
 /*
@@ -4254,30 +4317,30 @@ object2string(
 
     if (cl != NULL && IS_ENUM(cl))
     {
-	ga_concat_len(&ga, (char_u *)"enum ", 5);
+	GA_CONCAT_LITERAL(&ga, "enum ");
 	ga_concat_len(&ga, cl->class_name.string, cl->class_name.length);
 	char_u *enum_name = ((typval_T *)(obj + 1))->vval.v_string;
-	ga_concat_len(&ga, (char_u *)".", 1);
+	GA_CONCAT_LITERAL(&ga, ".");
 	ga_concat(&ga, enum_name);
     }
     else
     {
-	ga_concat_len(&ga, (char_u *)"object of ", 10);
+	GA_CONCAT_LITERAL(&ga, "object of ");
 	if (cl == NULL)
-	    ga_concat_len(&ga, (char_u *)"[unknown]", 9);
+	    GA_CONCAT_LITERAL(&ga, "[unknown]");
 	else
 	    ga_concat_len(&ga, cl->class_name.string, cl->class_name.length);
     }
     if (cl != NULL)
     {
-	ga_concat_len(&ga, (char_u *)" {", 2);
+	GA_CONCAT_LITERAL(&ga, " {");
 	for (int i = 0; i < cl->class_obj_member_count; ++i)
 	{
 	    if (i > 0)
-		ga_concat_len(&ga, (char_u *)", ", 2);
+		GA_CONCAT_LITERAL(&ga, ", ");
 	    ocmember_T *m = &cl->class_obj_members[i];
 	    ga_concat_len(&ga, m->ocm_name.string, m->ocm_name.length);
-	    ga_concat_len(&ga, (char_u *)": ", 2);
+	    GA_CONCAT_LITERAL(&ga, ": ");
 	    char_u *tf = NULL;
 	    char_u *s = echo_string_core((typval_T *)(obj + 1) + i,
 					 &tf, numbuf, copyID, echo_style,
@@ -4292,7 +4355,7 @@ object2string(
 	    }
 	    line_breakcheck();
 	}
-	ga_concat_len(&ga, (char_u *)"}", 1);
+	GA_CONCAT_LITERAL(&ga, "}");
     }
     if (ok == FAIL)
     {

@@ -3,9 +3,6 @@
 source util/screendump.vim
 import './util/vim9.vim' as v9
 
-" Socket backend for remote functions require the socket server to be running
-CheckSocketServer
-
 " Test for passing too many or too few arguments to builtin functions
 func Test_internalfunc_arg_error()
   let l =<< trim END
@@ -404,7 +401,7 @@ enddef
 
 def Test_bufload()
   assert_fails('bufload([])', 'E1220:')
-  bufload('')->assert_equal(0)
+  bufload('')
 enddef
 
 def Test_bufloaded()
@@ -649,7 +646,7 @@ def Test_ch_logfile()
   else
     assert_fails('ch_logfile(true)', 'E1174:')
     assert_fails('ch_logfile("foo", true)', 'E1174:')
-    ch_logfile('', '')->assert_equal(0)
+    ch_logfile('', '')
 
     v9.CheckSourceDefAndScriptFailure(['ch_logfile(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
     v9.CheckSourceDefAndScriptFailure(['ch_logfile("a", true)'], ['E1013: Argument 2: type mismatch, expected string but got bool', 'E1174: String required for argument 2'])
@@ -3527,12 +3524,18 @@ enddef
 
 def Test_remote_expr()
   CheckFeature clientserver
-  CheckEnv DISPLAY
+  CheckNotMSWindows
+
+  if has("x11")
+    CheckEnv DISPLAY
+  endif
+
   v9.CheckSourceDefAndScriptFailure(['remote_expr(1, "b")'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['remote_expr("a", 2)'], ['E1013: Argument 2: type mismatch, expected string but got number', 'E1174: String required for argument 2'])
   v9.CheckSourceDefAndScriptFailure(['remote_expr("a", "b", 3)'], ['E1013: Argument 3: type mismatch, expected string but got number', 'E1174: String required for argument 3'])
   v9.CheckSourceDefAndScriptFailure(['remote_expr("a", "b", "c", "d")'], ['E1013: Argument 4: type mismatch, expected number but got string', 'E1210: Number required for argument 4'])
-  v9.CheckSourceDefExecAndScriptFailure(['remote_expr("", "")'], 'E241: Unable to send to ')
+
+    v9.CheckSourceDefExecAndScriptFailure(['remote_expr("", "")'], 'E241: Unable to send to ')
 enddef
 
 def Test_remote_foreground()
@@ -3548,7 +3551,12 @@ enddef
 
 def Test_remote_peek()
   CheckFeature clientserver
-  CheckEnv DISPLAY
+  CheckNotMSWindows
+
+  if has("x11")
+    CheckEnv DISPLAY
+  endif
+
   v9.CheckSourceDefAndScriptFailure(['remote_peek(0z10)'], ['E1013: Argument 1: type mismatch, expected string but got blob', 'E1174: String required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['remote_peek("a5b6c7", [1])'], ['E1013: Argument 2: type mismatch, expected string but got list<number>', 'E1174: String required for argument 2'])
   v9.CheckSourceDefExecAndScriptFailure(['remote_peek("")'], 'E573: Invalid server id used')
@@ -3556,7 +3564,12 @@ enddef
 
 def Test_remote_read()
   CheckFeature clientserver
-  CheckEnv DISPLAY
+  CheckNotMSWindows
+
+  if has("x11")
+    CheckEnv DISPLAY
+  endif
+
   v9.CheckSourceDefAndScriptFailure(['remote_read(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['remote_read("a", "x")'], ['E1013: Argument 2: type mismatch, expected number but got string', 'E1210: Number required for argument 2'])
   v9.CheckSourceDefExecAndScriptFailure(['remote_read("")'], 'E573: Invalid server id used')
@@ -3564,7 +3577,12 @@ enddef
 
 def Test_remote_send()
   CheckFeature clientserver
-  CheckEnv DISPLAY
+  CheckNotMSWindows
+
+  if has("x11")
+    CheckEnv DISPLAY
+  endif
+
   v9.CheckSourceDefAndScriptFailure(['remote_send(1, "b")'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['remote_send("a", 2)'], ['E1013: Argument 2: type mismatch, expected string but got number', 'E1174: String required for argument 2'])
   v9.CheckSourceDefAndScriptFailure(['remote_send("a", "b", 3)'], ['E1013: Argument 3: type mismatch, expected string but got number', 'E1174: String required for argument 3'])
@@ -3573,7 +3591,12 @@ enddef
 
 def Test_remote_startserver()
   CheckFeature clientserver
-  CheckEnv DISPLAY
+  CheckNotMSWindows
+
+  if has("x11")
+    CheckEnv DISPLAY
+  endif
+
   v9.CheckSourceDefAndScriptFailure(['remote_startserver({})'], ['E1013: Argument 1: type mismatch, expected string but got dict<any>', 'E1174: String required for argument 1'])
 enddef
 
@@ -4077,8 +4100,8 @@ enddef
 
 def Test_setenv()
   v9.CheckSourceDefAndScriptFailure(['setenv(1, 2)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
-  assert_equal(0, setenv('', ''))
-  assert_equal(0, setenv('', v:null))
+  setenv('', '')
+  setenv('', v:null)
 enddef
 
 def Test_setfperm()
@@ -4646,13 +4669,13 @@ def Test_synstack()
 enddef
 
 def Test_system()
-  v9.CheckSourceDefAndScriptFailure(['system(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
+  v9.CheckSourceDefAndScriptFailure(['system(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1222: String or List required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['system("a", {})'], ['E1013: Argument 2: type mismatch, expected string but got dict<any>', 'E1224: String, Number or List required for argument 2'])
   assert_equal("123\n", system('echo 123'))
 enddef
 
 def Test_systemlist()
-  v9.CheckSourceDefAndScriptFailure(['systemlist(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1174: String required for argument 1'])
+  v9.CheckSourceDefAndScriptFailure(['systemlist(1)'], ['E1013: Argument 1: type mismatch, expected string but got number', 'E1222: String or List required for argument 1'])
   v9.CheckSourceDefAndScriptFailure(['systemlist("a", {})'], ['E1013: Argument 2: type mismatch, expected string but got dict<any>', 'E1224: String, Number or List required for argument 2'])
   if has('win32')
     call assert_equal(["123\r"], systemlist('echo 123'))
@@ -4927,7 +4950,7 @@ enddef
 
 def Test_timer_stop()
   v9.CheckSourceDefAndScriptFailure(['timer_stop("x")'], ['E1013: Argument 1: type mismatch, expected number but got string', 'E1210: Number required for argument 1'])
-  assert_equal(0, timer_stop(100))
+  timer_stop(100)
 enddef
 
 def Test_tolower()
@@ -4971,6 +4994,22 @@ def Test_typename()
   endif
   var l: list<func(list<number>): any> = [function('min')]
   assert_equal('list<func(list<number>): any>', typename(l))
+
+  # Check that circular list/dict references don't cause infinite recursion.
+  # Use legacy script where lv_type is not set so the copyID mechanism is used.
+  v9.CheckSourceLegacySuccess([
+        'let circ_l = []',
+        'call add(circ_l, circ_l)',
+        "call assert_equal('list<list<any>>', typename(circ_l))",
+        'let circ_d = {}',
+        "let circ_d['self'] = circ_d",
+        "call assert_equal('dict<dict<any>>', typename(circ_d))",
+  ])
+
+  # Shared (non-circular) references must not be treated as circular.
+  # repeat() makes all elements point to the same inner list/dict object.
+  assert_equal('list<list<string>>', [[" "]]->repeat(3)->typename())
+  assert_equal('list<dict<number>>', [{'a': 1}]->repeat(3)->typename())
 enddef
 
 def Test_undofile()

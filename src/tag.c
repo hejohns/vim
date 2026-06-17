@@ -188,7 +188,7 @@ did_set_tagfunc(optset_T *args)
 }
 #endif
 
-# if defined(EXITFREE)
+#if defined(EXITFREE)
     void
 free_tagfunc_option(void)
 {
@@ -196,7 +196,7 @@ free_tagfunc_option(void)
     free_callback(&tfu_cb);
 # endif
 }
-# endif
+#endif
 
 #if defined(FEAT_EVAL)
 /*
@@ -476,7 +476,7 @@ do_tag(
 		    curwin->w_cursor.lnum = saved_fmark.mark.lnum;
 		}
 		curwin->w_cursor.col = saved_fmark.mark.col;
-		curwin->w_set_curswant = TRUE;
+		curwin->w_set_curswant = true;
 		check_cursor();
 #ifdef FEAT_FOLDING
 		if ((fdo_flags & FDO_TAG) && old_KeyTyped)
@@ -745,6 +745,9 @@ do_tag(
 	else
 	{
 	    int ask_for_selection = FALSE;
+#if defined(FEAT_EVAL)
+	    size_t  IObufflen;
+#endif
 
 #ifdef FEAT_CSCOPE
 	    if (type == DT_CSCOPE && num_matches > 1)
@@ -880,8 +883,8 @@ do_tag(
 
 #if defined(FEAT_EVAL)
 	    // Let the SwapExists event know what tag we are jumping to.
-	    vim_snprintf((char *)IObuff, IOSIZE, ":ta %s\r", name);
-	    set_vim_var_string(VV_SWAPCOMMAND, IObuff, -1);
+	    IObufflen = vim_snprintf_safelen((char *)IObuff, IOSIZE, ":ta %s\r", name);
+	    set_vim_var_string(VV_SWAPCOMMAND, IObuff, (int)IObufflen);
 #endif
 
 	    /*
@@ -935,9 +938,9 @@ end_do_tag:
     if (use_tagstack && tagstackidx <= curwin->w_tagstacklen)
 	curwin->w_tagstackidx = tagstackidx;
     postponed_split = 0;	// don't split next time
-# ifdef FEAT_QUICKFIX
+#ifdef FEAT_QUICKFIX
     g_do_tagpreview = 0;	// don't do tag preview next time
-# endif
+#endif
 
     vim_free(tofree);
 #ifdef FEAT_CSCOPE
@@ -1460,7 +1463,7 @@ find_tagfunc_tags(
     // create 'info' dict argument
     if ((d = dict_alloc_lock(VAR_FIXED)) == NULL)
 	return FAIL;
-    if (tag->user_data != NULL)
+    if (!(flags & TAG_INS_COMP) && tag->user_data != NULL)
 	dict_add_string(d, "user_data", tag->user_data);
     if (buf_ffname != NULL)
 	dict_add_string(d, "buf_ffname", buf_ffname);
@@ -1515,11 +1518,11 @@ find_tagfunc_tags(
 	    break;
 	}
 
-#ifdef FEAT_EMACS_TAGS
+# ifdef FEAT_EMACS_TAGS
 	len = 3;
-#else
+# else
 	len = 2;
-#endif
+# endif
 	res_name = NULL;
 	res_fname = NULL;
 	res_cmd = NULL;
@@ -1581,9 +1584,9 @@ find_tagfunc_tags(
 
 	    *p++ = MT_GL_OTH + 1;   // mtt
 	    *p++ = TAG_SEP;	    // no tag file name
-#ifdef FEAT_EMACS_TAGS
+# ifdef FEAT_EMACS_TAGS
 	    *p++ = TAG_SEP;
-#endif
+# endif
 
 	    STRCPY(p, res_name);
 	    p += STRLEN(p);
@@ -1901,6 +1904,9 @@ emacs_tags_new_filename(findtags_state_T *st)
 
     for (p = st->ebuf; *p && *p != ','; p++)
 	;
+    // invalid
+    if (*p == NUL)
+	return;
     *p = NUL;
 
     // check for an included tags file.
@@ -2019,6 +2025,9 @@ etag_fail:
     }
     else			    // second format: isolate tagname
     {
+	if (p_7f == lbuf)
+	    goto etag_fail;
+
 	// find end of tagname
 	for (p = p_7f - 1; !vim_iswordc(*p); --p)
 	    if (p == lbuf)
@@ -2199,11 +2208,11 @@ findtags_start_state_handler(
     // When "!_TAG_FILE_SORTED" found: start binary search if
     // flag set.
     // For cscope, it's always linear.
-# ifdef FEAT_CSCOPE
+#ifdef FEAT_CSCOPE
     if (st->linear || use_cscope)
-# else
+#else
     if (st->linear)
-# endif
+#endif
 	st->state = TS_LINEAR;
     else if (st->tag_file_sorted == NUL)
 	st->state = TS_BINARY;
@@ -3071,7 +3080,7 @@ find_tags(
 
     int		save_emsg_off;
 
-    int		help_save;
+    bool	help_save;
 #ifdef FEAT_MULTI_LANG
     int		i;
     char_u	*saved_pat = NULL;		// copy of pat[]
@@ -3113,13 +3122,13 @@ find_tags(
      * Initialize a few variables
      */
     if (st.help_only)				// want tags from help file
-	curbuf->b_help = TRUE;			// will be restored later
+	curbuf->b_help = true;			// will be restored later
 #ifdef FEAT_CSCOPE
     else if (use_cscope)
     {
 	// Make sure we don't mix help and cscope, confuses Coverity.
 	st.help_only = FALSE;
-	curbuf->b_help = FALSE;
+	curbuf->b_help = false;
     }
 #endif
 
@@ -3219,10 +3228,10 @@ find_tags(
 	if (st.stop_searching || st.linear || (!p_ic && noic) ||
 						st.orgpat->regmatch.rm_ic)
 	    break;
-# ifdef FEAT_CSCOPE
+#ifdef FEAT_CSCOPE
 	if (use_cscope)
 	    break;
-# endif
+#endif
 
 	// try another time while ignoring case
 	st.orgpat->regmatch.rm_ic = TRUE;
@@ -3347,7 +3356,7 @@ get_tagfname(
 	    if (tnp->tn_hf_idx > tag_fnames.ga_len || *p_hf == NUL)
 		return FAIL;
 	    ++tnp->tn_hf_idx;
-	    STRCPY(buf, p_hf);
+	    vim_strncpy(buf, p_hf, MAXPATHL - STRLEN_LITERAL("tags") - 1);
 	    STRCPY(gettail(buf), "tags");
 #ifdef BACKSLASH_IN_FILENAME
 	    slash_adjust(buf);
@@ -3889,7 +3898,7 @@ jumpto_tag(
 
     if (GETFILE_SUCCESS(getfile_result))	// got to the right file
     {
-	curwin->w_set_curswant = TRUE;
+	curwin->w_set_curswant = true;
 	postponed_split = 0;
 
 	save_magic_overruled = magic_overruled;
@@ -4126,10 +4135,21 @@ expand_tag_fname(char_u *fname, char_u *tag_fname, int expand)
     char_u	*expanded_fname = NULL;
     expand_T	xpc;
 
+    // Refuse to follow URLs from tag files unless 'tagsecure' is false.
+    // Tag entries are expected to reference local source files; a URL would
+    // otherwise be passed to netrw and trigger a network request.
+    if (p_tagsecure && path_with_url(fname))
+    {
+       emsg(_(e_tag_file_entry_must_not_be_url));
+       return NULL;
+    }
+
     /*
      * Expand file name (for environment variables) when needed.
+     * Disallow backticks, they could execute arbitrary shell
+     * commands.  This is not needed for tag filenames.
      */
-    if (expand && mch_has_wildcard(fname))
+    if (expand && mch_has_wildcard(fname) && vim_strchr(fname, '`') == NULL)
     {
 	ExpandInit(&xpc);
 	xpc.xp_context = EXPAND_FILES;
@@ -4680,14 +4700,14 @@ set_tagstack(win_T *wp, dict_T *d, int action)
     dictitem_T	*di;
     list_T	*l = NULL;
 
-#ifdef FEAT_EVAL
+# ifdef FEAT_EVAL
     // not allowed to alter the tag stack entries from inside tagfunc
     if (tfu_in_use)
     {
 	emsg(_(e_cannot_modify_tag_stack_within_tagfunc));
 	return FAIL;
     }
-#endif
+# endif
 
     if ((di = dict_find(d, (char_u *)"items", -1)) != NULL)
     {

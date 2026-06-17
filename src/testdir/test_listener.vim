@@ -777,9 +777,39 @@ endfunc
 func s:OnRedraw()
 endfunc
 
-" Test if partial is correctly ref'ed and doesn't cause use afte free error
+" Test if partial is correctly ref'ed and doesn't cause use after free error
 func Test_redraw_listener_partial()
   call redraw_listener_add(#{on_start: function("s:OnRedraw", [1])})
+endfunc
+
+func Test_listener_blockwise_paste()
+  new
+  call setline(1, ['1', '2', '3'])
+  let s:list = []
+  let id = listener_add('s:StoreListArgs')
+
+  " yank a blockwise selection and paste at the end of the buffer, which
+  " appends new lines
+  call feedkeys("1G0\<C-v>2jyGp", 'xt')
+  call listener_flush()
+  " the listener should report correct lnume (before the change) and added
+  call assert_equal(3, s:start)
+  call assert_equal(4, s:end)
+  call assert_equal(2, s:added)
+
+  call listener_remove(id)
+  bwipe!
+endfunc
+
+func Test_listener_add_in_sandbox()
+  call assert_fails(
+    \ 'sandbox call redraw_listener_add({"on_start": function("tr")})',
+    \ 'E48:')
+  call assert_fails(
+    \ 'sandbox call listener_add({"on_start": function("tr")})',
+    \ 'E48:')
+  call assert_fails('sandbox call listener_flush()', 'E48:')
+  call assert_fails('sandbox call listener_remove(1)', 'E48:')
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

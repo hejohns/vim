@@ -38,42 +38,9 @@ static int clip_provider_is_available(char_u *provider);
 
 #if defined(FEAT_CLIPBOARD)
 
-#if defined(FEAT_WAYLAND_CLIPBOARD)
+# if defined(FEAT_WAYLAND_CLIPBOARD)
 
-# include "wayland.h"
-
-# ifdef FEAT_WAYLAND_CLIPBOARD_FS
-
-// Structures used for focus stealing
-typedef struct {
-    struct wl_shm_pool	*pool;
-    int			fd;
-
-    struct wl_buffer	*buffer;
-    bool		available;
-
-    int			width;
-    int			height;
-    int			stride;
-    int			size;
-} clip_wl_buffer_store_T;
-
-typedef struct {
-    void		    *user_data;
-    void		    (*on_focus)(void *data, uint32_t serial);
-
-    struct wl_surface	    *surface;
-    struct wl_keyboard	    *keyboard;
-
-    struct {
-	struct xdg_surface  *surface;
-	struct xdg_toplevel *toplevel;
-    } shell;
-
-    bool got_focus;
-} clip_wl_fs_surface_T; // fs = focus steal
-
-# endif // FEAT_WAYLAND_CLIPBOARD_FS
+#  include "wayland.h"
 
 // Represents either the regular or primary selection
 typedef struct {
@@ -84,10 +51,6 @@ typedef struct {
 					// else NULL if we don't.
     vwl_data_offer_T	*offer;		// Current offer for the selection
 
-# ifdef FEAT_WAYLAND_CLIPBOARD_FS
-    bool		requires_focus;	// If focus needs to be given to us to
-					// work
-# endif
     bool		own_success;	// Used by clip_wl_own_selection()
     bool		available;	// If selection is ready to serve/use
 
@@ -101,10 +64,6 @@ typedef struct {
 typedef struct {
     vwl_seat_T *seat;
 
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
-    clip_wl_buffer_store_T *fs_buffer;
-#endif
-
     clip_wl_selection_T regular;
     clip_wl_selection_T primary;
 } clip_wl_T;
@@ -113,7 +72,9 @@ typedef struct {
 // Mimes with a lower index in the array are prioritized first when we are
 // receiving data.
 static const char *supported_mimes[] = {
+    VIMENC_MIMETYPE_NAME,
     VIMENC_ATOM_NAME,
+    VIM_MIMETYPE_NAME,
     VIM_ATOM_NAME,
     "text/plain;charset=utf-8",
     "text/plain",
@@ -131,11 +92,11 @@ static int clip_wl_own_selection(Clipboard_T *cbd);
 static void clip_wl_lose_selection(Clipboard_T *cbd);
 static void clip_wl_set_selection(Clipboard_T *cbd);
 
-# if defined(USE_SYSTEM)
+#  if defined(USE_SYSTEM)
 static bool clip_wl_owner_exists(Clipboard_T *cbd);
-# endif
+#  endif
 
-#endif // FEAT_WAYLAND_CLIPBOARD
+# endif // FEAT_WAYLAND_CLIPBOARD
 
 /*
  * Selection stuff using Visual mode, for cutting and pasting text to other
@@ -220,30 +181,30 @@ clip_update_selection(Clipboard_T *clip)
     static int
 clip_gen_own_selection(Clipboard_T *cbd)
 {
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
-# ifdef FEAT_GUI
+# if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
+#  ifdef FEAT_GUI
     if (gui.in_use)
 	return clip_mch_own_selection(cbd);
     else
-# endif
+#  endif
     {
 	if (clipmethod == CLIPMETHOD_WAYLAND)
 	{
-#ifdef FEAT_WAYLAND_CLIPBOARD
+#  ifdef FEAT_WAYLAND_CLIPBOARD
 	    return clip_wl_own_selection(cbd);
-#endif
+#  endif
 	}
 	else if (clipmethod == CLIPMETHOD_X11)
 	{
-#ifdef FEAT_XCLIPBOARD
+#  ifdef FEAT_XCLIPBOARD
 	    return clip_xterm_own_selection(cbd);
-#endif
+#  endif
 	}
     }
     return FAIL;
-#else
+# else
     return clip_mch_own_selection(cbd);
-#endif
+# endif
 }
 
     void
@@ -253,7 +214,7 @@ clip_own_selection(Clipboard_T *cbd)
      * Also want to check somehow that we are reading from the keyboard rather
      * than a mapping etc.
      */
-#if defined(FEAT_X11) || defined(FEAT_WAYLAND_CLIPBOARD)
+# if defined(FEAT_X11) || defined(FEAT_WAYLAND_CLIPBOARD)
     // Always own the selection, we might have lost it without being
     // notified, e.g. during a ":sh" command.
     if (cbd->available)
@@ -275,47 +236,47 @@ clip_own_selection(Clipboard_T *cbd)
 		redraw_curbuf_later(UPD_INVERTED_ALL);
 	}
     }
-#else
+# else
     // Only own the clipboard when we didn't own it yet.
     if (!cbd->owned && cbd->available)
 	cbd->owned = (clip_gen_own_selection(cbd) == OK);
-#endif
+# endif
 }
 
     static void
 clip_gen_lose_selection(Clipboard_T *cbd)
 {
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
-# ifdef FEAT_GUI
+# if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
+#  ifdef FEAT_GUI
     if (gui.in_use)
 	clip_mch_lose_selection(cbd);
     else
-# endif
+#  endif
     {
 	if (clipmethod == CLIPMETHOD_WAYLAND)
 	{
-#ifdef FEAT_WAYLAND_CLIPBOARD
+#  ifdef FEAT_WAYLAND_CLIPBOARD
 	    clip_wl_lose_selection(cbd);
-#endif
+#  endif
 	}
 	else if (clipmethod == CLIPMETHOD_X11)
 	{
-#ifdef FEAT_XCLIPBOARD
+#  ifdef FEAT_XCLIPBOARD
 	    clip_xterm_lose_selection(cbd);
-#endif
+#  endif
 	}
     }
-#else
+# else
     clip_mch_lose_selection(cbd);
-#endif
+# endif
 }
 
     void
 clip_lose_selection(Clipboard_T *cbd)
 {
-#ifdef FEAT_X11
+# ifdef FEAT_X11
     int	    was_owned = cbd->owned;
-#endif
+# endif
     int     visual_selection = FALSE;
 
     if (cbd == &clip_star || cbd == &clip_plus)
@@ -326,7 +287,7 @@ clip_lose_selection(Clipboard_T *cbd)
     if (visual_selection)
 	clip_clear_selection(cbd);
     clip_gen_lose_selection(cbd);
-#ifdef FEAT_X11
+# ifdef FEAT_X11
     if (visual_selection)
     {
 	// May have to show a different kind of highlighting for the selected
@@ -346,7 +307,7 @@ clip_lose_selection(Clipboard_T *cbd)
 	    out_flush_cursor(TRUE, FALSE);
 	}
     }
-#endif
+# endif
 }
 
     static void
@@ -452,11 +413,16 @@ clip_auto_select(void)
     int
 clip_isautosel_star(void)
 {
-    return (
-#ifdef FEAT_GUI
-	    gui.in_use ? (vim_strchr(p_go, GO_ASEL) != NULL) :
-#endif
-	    clip_autoselect_star);
+# ifdef FEAT_CLIPBOARD_PROVIDER
+    if (clipmethod == CLIPMETHOD_PROVIDER)
+	return false;
+# endif
+# ifdef FEAT_GUI
+    if (gui.in_use)
+	return vim_strchr(p_go, GO_ASEL) != NULL
+	    && vim_strchr(p_go, GO_ASELPLUS) == NULL;
+# endif
+    return clip_autoselect_star;
 }
 
 /*
@@ -466,11 +432,15 @@ clip_isautosel_star(void)
     int
 clip_isautosel_plus(void)
 {
-    return (
-#ifdef FEAT_GUI
-	    gui.in_use ? (vim_strchr(p_go, GO_ASELPLUS) != NULL) :
-#endif
-	    clip_autoselect_plus);
+# ifdef FEAT_CLIPBOARD_PROVIDER
+    if (clipmethod == CLIPMETHOD_PROVIDER)
+	return false;
+# endif
+# ifdef FEAT_GUI
+    if (gui.in_use)
+	return vim_strchr(p_go, GO_ASELPLUS) != NULL;
+# endif
+    return clip_autoselect_plus;
 }
 
 
@@ -496,9 +466,9 @@ clip_compare_pos(
 }
 
 // "how" flags for clip_invert_area()
-#define CLIP_CLEAR	1
-#define CLIP_SET	2
-#define CLIP_TOGGLE	3
+# define CLIP_CLEAR	1
+# define CLIP_SET	2
+# define CLIP_TOGGLE	3
 
 /*
  * Invert or un-invert a rectangle of the screen.
@@ -518,7 +488,7 @@ clip_invert_rectangle(
     int		height = height_arg;
     int		width = width_arg;
 
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     // this goes on top of all popup windows
     screen_zindex = CLIP_ZINDEX;
 
@@ -536,16 +506,16 @@ clip_invert_rectangle(
     }
     if (height > cbd->max_row - row + 1)
 	height = cbd->max_row - row + 1;
-#endif
-#ifdef FEAT_GUI
+# endif
+# ifdef FEAT_GUI
     if (gui.in_use)
 	gui_mch_invert_rectangle(row, col, height, width);
     else
-#endif
+# endif
 	screen_draw_rectangle(row, col, height, width, invert);
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     screen_zindex = 0;
-#endif
+# endif
 }
 
 /*
@@ -568,11 +538,11 @@ clip_invert_area(
     int		invert = FALSE;
     int		max_col;
 
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     max_col = cbd->max_col - 1;
-#else
+# else
     max_col = Columns - 1;
-#endif
+# endif
 
     if (how == CLIP_SET)
 	invert = TRUE;
@@ -691,7 +661,7 @@ clip_update_modeless_selection(
  * Find the starting and ending positions of the word at the given row and
  * column.  Only white-separated words are recognized here.
  */
-#define CHAR_CLASS(c)	(c <= ' ' ? ' ' : vim_iswordc(c))
+# define CHAR_CLASS(c)	(c <= ' ' ? ' ' : vim_iswordc(c))
 
     static void
 clip_get_word_boundaries(Clipboard_T *cb, int row, int col)
@@ -744,11 +714,11 @@ clip_get_line_end(Clipboard_T *cbd UNUSED, int row)
     if (row >= screen_Rows || ScreenLines == NULL)
 	return 0;
     for (i =
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
 	    cbd->max_col;
-#else
+# else
 	    screen_Columns;
-#endif
+# endif
 			    i > 0; i--)
 	if (ScreenLines[LineOffset[row] + i - 1] != ' ')
 	    break;
@@ -762,7 +732,7 @@ clip_get_line_end(Clipboard_T *cbd UNUSED, int row)
 clip_start_selection(int col, int row, int repeated_click)
 {
     Clipboard_T	*cb = &clip_star;
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     win_T	*wp;
     int		row_cp = row;
     int		col_cp = col;
@@ -772,7 +742,7 @@ clip_start_selection(int col, int row, int repeated_click)
 				  && popup_is_in_scrollbar(wp, row_cp, col_cp))
 	// click or double click in scrollbar does not start a selection
 	return;
-#endif
+# endif
 
     if (cb->state == SELECT_DONE)
 	clip_clear_selection(cb);
@@ -786,7 +756,7 @@ clip_start_selection(int col, int row, int repeated_click)
     cb->end	    = cb->start;
     cb->origin_row  = (short_u)cb->start.lnum;
     cb->state	    = SELECT_IN_PROGRESS;
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     if (wp != NULL && WIN_IS_POPUP(wp))
     {
 	// Click in a popup window restricts selection to that window,
@@ -807,7 +777,7 @@ clip_start_selection(int col, int row, int repeated_click)
 	cb->min_row = 0;
 	cb->max_row = screen_Rows;
     }
-#endif
+# endif
 
     if (repeated_click)
     {
@@ -817,11 +787,11 @@ clip_start_selection(int col, int row, int repeated_click)
     else
 	cb->mode = SELECT_MODE_CHAR;
 
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
     // clear the cursor until the selection is made
     if (gui.in_use)
 	gui_undraw_cursor();
-#endif
+# endif
 
     switch (cb->mode)
     {
@@ -851,9 +821,9 @@ clip_start_selection(int col, int row, int repeated_click)
 
     cb->prev = cb->start;
 
-#ifdef DEBUG_SELECTION
+# ifdef DEBUG_SELECTION
     printf("Selection started at (%ld,%d)\n", cb->start.lnum, cb->start.col);
-#endif
+# endif
 }
 
 /*
@@ -878,29 +848,29 @@ clip_process_selection(
 	// Check to make sure we have something selected
 	if (cb->start.lnum == cb->end.lnum && cb->start.col == cb->end.col)
 	{
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
 	    if (gui.in_use)
 		gui_update_cursor(FALSE, FALSE);
-#endif
+# endif
 	    cb->state = SELECT_CLEARED;
 	    return;
 	}
 
-#ifdef DEBUG_SELECTION
+# ifdef DEBUG_SELECTION
 	printf("Selection ended: (%ld,%d) to (%ld,%d)\n", cb->start.lnum,
 		cb->start.col, cb->end.lnum, cb->end.col);
-#endif
-	if (clip_isautosel_star()
+# endif
+	if (clip_isautosel_star() || clip_isautosel_plus()
 		|| (
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
 		    gui.in_use ? (vim_strchr(p_go, GO_ASELML) != NULL) :
-#endif
+# endif
 		    clip_autoselectml))
 	    clip_copy_modeless_selection(FALSE);
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
 	if (gui.in_use)
 	    gui_update_cursor(FALSE, FALSE);
-#endif
+# endif
 
 	cb->state = SELECT_DONE;
 	return;
@@ -951,9 +921,9 @@ clip_process_selection(
     // set state, for when using the right mouse button
     cb->state = SELECT_IN_PROGRESS;
 
-#ifdef DEBUG_SELECTION
+# ifdef DEBUG_SELECTION
     printf("Selection extending to (%d,%d)\n", row, col);
-#endif
+# endif
 
     if (repeated_click && ++cb->mode > SELECT_MODE_LINE)
 	cb->mode = SELECT_MODE_CHAR;
@@ -1030,10 +1000,10 @@ clip_process_selection(
     cb->prev.lnum = row;
     cb->prev.col  = col;
 
-#ifdef DEBUG_SELECTION
+# ifdef DEBUG_SELECTION
 	printf("Selection is: (%ld,%d) to (%ld,%d)\n", cb->start.lnum,
 		cb->start.col, cb->end.lnum, cb->end.col);
-#endif
+# endif
 }
 
 # if defined(FEAT_GUI)
@@ -1119,13 +1089,17 @@ clip_scroll_selection(
 }
 
 /*
- * Copy the currently selected area into the '*' register so it will be
+ * Copy the currently selected area into the '*' or '+' register so it will be
  * available for pasting.
- * When "both" is TRUE also copy to the '+' register.
+ * When "both" is TRUE also copy to the other register.
  */
     void
 clip_copy_modeless_selection(int both UNUSED)
 {
+    // The info for the modeless selection is stored in '*' register, however if
+    // we are using the '+' register for modeless autoselect, we copy to
+    // clip_plus instead while using the info in clip_star.
+    Clipboard_T *cbd = clip_isautosel_plus() ? &clip_plus : &clip_star;
     char_u	*buffer;
     char_u	*bufp;
     int		row;
@@ -1156,7 +1130,7 @@ clip_copy_modeless_selection(int both UNUSED)
     {
 	row = col1; col1 = col2; col2 = row;
     }
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
     if (col1 < clip_star.min_col)
 	col1 = clip_star.min_col;
     if (col2 > clip_star.max_col)
@@ -1167,7 +1141,7 @@ clip_copy_modeless_selection(int both UNUSED)
 	row1 = clip_star.min_row;
     if (row2 > clip_star.max_row)
 	row2 = clip_star.max_row;
-#endif
+# endif
     // correct starting point for being on right half of double-wide char
     p = ScreenLines + LineOffset[row1];
     if (enc_dbcs != 0)
@@ -1191,30 +1165,30 @@ clip_copy_modeless_selection(int both UNUSED)
 	if (row == row1)
 	    start_col = col1;
 	else
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
 	    start_col = clip_star.min_col;
-#else
+# else
 	    start_col = 0;
-#endif
+# endif
 
 	if (row == row2)
 	    end_col = col2;
 	else
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
 	    end_col = clip_star.max_col;
-#else
+# else
 	    end_col = Columns;
-#endif
+# endif
 
 	line_end_col = clip_get_line_end(&clip_star, row);
 
 	// See if we need to nuke some trailing whitespace
 	if (end_col >=
-#ifdef FEAT_PROP_POPUP
+# ifdef FEAT_PROP_POPUP
 		clip_star.max_col
-#else
+# else
 		Columns
-#endif
+# endif
 		    && (row < row2 || end_col > line_end_col))
 	{
 	    // Get rid of trailing whitespace
@@ -1297,25 +1271,26 @@ clip_copy_modeless_selection(int both UNUSED)
 	*bufp++ = NL;
 
     // First cleanup any old selection and become the owner.
-    clip_free_selection(&clip_star);
-    clip_own_selection(&clip_star);
+    clip_free_selection(cbd);
+    clip_own_selection(cbd);
 
     // Yank the text into the '*' register.
-    clip_yank_selection(MCHAR, buffer, (long)(bufp - buffer), &clip_star);
+    clip_yank_selection(MCHAR, buffer, (long)(bufp - buffer), cbd);
 
     // Make the register contents available to the outside world.
-    clip_gen_set_selection(&clip_star);
+    clip_gen_set_selection(cbd);
 
-#ifdef FEAT_X11
+# ifdef FEAT_X11
     if (both)
     {
+	Clipboard_T *other = cbd == &clip_star ? &clip_plus : &clip_star;
 	// Do the same for the '+' register.
-	clip_free_selection(&clip_plus);
-	clip_own_selection(&clip_plus);
-	clip_yank_selection(MCHAR, buffer, (long)(bufp - buffer), &clip_plus);
-	clip_gen_set_selection(&clip_plus);
+	clip_free_selection(other);
+	clip_own_selection(other);
+	clip_yank_selection(MCHAR, buffer, (long)(bufp - buffer), other);
+	clip_gen_set_selection(other);
     }
-#endif
+# endif
     vim_free(buffer);
 }
 
@@ -1333,108 +1308,107 @@ clip_gen_set_selection(Clipboard_T *cbd)
 	    return;
 	}
     }
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
-# ifdef FEAT_GUI
+# if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
+#  ifdef FEAT_GUI
     if (gui.in_use)
 	clip_mch_set_selection(cbd);
     else
-# endif
+#  endif
     {
 	if (clipmethod == CLIPMETHOD_WAYLAND)
 	{
-#ifdef FEAT_WAYLAND_CLIPBOARD
+#  ifdef FEAT_WAYLAND_CLIPBOARD
 	    clip_wl_set_selection(cbd);
-#endif
+#  endif
 	}
 	else if (clipmethod == CLIPMETHOD_X11)
 	{
-#ifdef FEAT_XCLIPBOARD
+#  ifdef FEAT_XCLIPBOARD
 	    clip_xterm_set_selection(cbd);
-#endif
+#  endif
 	}
     }
-#else
+# else
     clip_mch_set_selection(cbd);
-#endif
+# endif
 }
 
     static void
 clip_gen_request_selection(Clipboard_T *cbd)
 {
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
-# ifdef FEAT_GUI
+# if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
+#  ifdef FEAT_GUI
     if (gui.in_use)
 	clip_mch_request_selection(cbd);
     else
-# endif
+#  endif
     {
 	if (clipmethod == CLIPMETHOD_WAYLAND)
 	{
-#ifdef FEAT_WAYLAND_CLIPBOARD
+#  ifdef FEAT_WAYLAND_CLIPBOARD
 	    clip_wl_request_selection(cbd);
-#endif
+#  endif
 	}
 	else if (clipmethod == CLIPMETHOD_X11)
 	{
-#ifdef FEAT_XCLIPBOARD
+#  ifdef FEAT_XCLIPBOARD
 	    clip_xterm_request_selection(cbd);
-#endif
+#  endif
 	}
     }
-#else
+# else
     clip_mch_request_selection(cbd);
-#endif
+# endif
 }
 
-#if (defined(FEAT_X11) && defined(FEAT_XCLIPBOARD) && defined(USE_SYSTEM)) \
-
+# if (defined(FEAT_X11) && defined(FEAT_XCLIPBOARD) && defined(USE_SYSTEM))
     static int
 clip_x11_owner_exists(Clipboard_T *cbd)
 {
     return XGetSelectionOwner(X_DISPLAY, cbd->sel_atom) != None;
 }
-#endif
+# endif
 
-#if (defined(FEAT_X11) || defined(FEAT_WAYLAND_CLIPBOARD)) \
+# if (defined(FEAT_X11) || defined(FEAT_WAYLAND_CLIPBOARD)) \
 	&& defined(USE_SYSTEM)
     int
 clip_gen_owner_exists(Clipboard_T *cbd UNUSED)
 {
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
-# ifdef FEAT_GUI_GTK
+#  if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
+#   ifdef FEAT_GUI_GTK
     if (gui.in_use)
 	return clip_gtk_owner_exists(cbd);
     else
-# endif
+#   endif
     {
 	if (clipmethod == CLIPMETHOD_WAYLAND)
 	{
-#ifdef FEAT_WAYLAND_CLIPBOARD
+#   ifdef FEAT_WAYLAND_CLIPBOARD
 	    return clip_wl_owner_exists(cbd);
-#endif
+#   endif
 	}
 	else if (clipmethod == CLIPMETHOD_X11)
 	{
-#ifdef FEAT_XCLIPBOARD
+#   ifdef FEAT_XCLIPBOARD
 	    return clip_x11_owner_exists(cbd);
-#endif
+#   endif
 	}
 	else
 	    return FALSE;
     }
-#else
+#  else
     return TRUE;
-#endif
+#  endif
 }
-#endif
+# endif
 
 /*
  * Stuff for the X clipboard.  Shared between VMS and Unix.
  */
 
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_GUI_X11)
-# include <X11/Xatom.h>
-# include <X11/Intrinsic.h>
+# if defined(FEAT_XCLIPBOARD) || defined(FEAT_GUI_X11)
+#  include <X11/Xatom.h>
+#  include <X11/Intrinsic.h>
 
 /*
  * Open the application context (if it hasn't been opened yet).
@@ -1452,6 +1426,10 @@ open_app_context(void)
 
 static Atom	vim_atom;	// Vim's own special selection format
 static Atom	vimenc_atom;	// Vim's extended selection format
+static Atom	vim_mt_atom;	// Vim's own special selection format (in mime
+				// type format)
+static Atom	vimenc_mt_atom;	// Vim's extended selection format (in mime type
+				// format)
 static Atom	utf8_atom;
 static Atom	compound_text_atom;
 static Atom	text_atom;
@@ -1463,6 +1441,8 @@ x11_setup_atoms(Display *dpy)
 {
     vim_atom	       = XInternAtom(dpy, VIM_ATOM_NAME,   False);
     vimenc_atom	       = XInternAtom(dpy, VIMENC_ATOM_NAME,False);
+    vim_mt_atom	       = XInternAtom(dpy, VIM_MIMETYPE_NAME,   False);
+    vimenc_mt_atom     = XInternAtom(dpy, VIMENC_MIMETYPE_NAME,False);
     utf8_atom	       = XInternAtom(dpy, "UTF8_STRING",   False);
     compound_text_atom = XInternAtom(dpy, "COMPOUND_TEXT", False);
     text_atom	       = XInternAtom(dpy, "TEXT",	   False);
@@ -1504,13 +1484,15 @@ clip_x11_convert_selection_cb(
     // requestor wants to know what target types we support
     if (*target == targets_atom)
     {
-	static Atom array[7];
+	static Atom array[9];
 
 	*value = (XtPointer)array;
 	i = 0;
 	array[i++] = targets_atom;
 	array[i++] = vimenc_atom;
 	array[i++] = vim_atom;
+	array[i++] = vimenc_mt_atom;
+	array[i++] = vim_mt_atom;
 	if (enc_utf8)
 	    array[i++] = utf8_atom;
 	array[i++] = XA_STRING;
@@ -1527,8 +1509,10 @@ clip_x11_convert_selection_cb(
 
     if (       *target != XA_STRING
 	    && *target != vimenc_atom
+	    && *target != vimenc_mt_atom
 	    && (*target != utf8_atom || !enc_utf8)
 	    && *target != vim_atom
+	    && *target != vim_mt_atom
 	    && *target != text_atom
 	    && *target != compound_text_atom)
 	return False;
@@ -1539,11 +1523,11 @@ clip_x11_convert_selection_cb(
 	return False;
 
     // For our own format, the first byte contains the motion type
-    if (*target == vim_atom)
+    if (*target == vim_atom || *target == vim_mt_atom)
 	(*length)++;
 
     // Our own format with encoding: motion 'encoding' NUL text
-    if (*target == vimenc_atom)
+    if (*target == vimenc_atom || *target == vimenc_mt_atom)
 	*length += STRLEN(p_enc) + 2;
 
     if (save_length < *length || save_length / 2 >= *length)
@@ -1586,20 +1570,26 @@ clip_x11_convert_selection_cb(
 	save_result = (char_u *)*value;
 	save_length = *length;
     }
-    else if (*target == vimenc_atom)
+    else if (*target == vimenc_atom || *target == vimenc_mt_atom)
     {
 	int l = STRLEN(p_enc);
 
 	save_result[0] = motion_type;
 	STRCPY(save_result + 1, p_enc);
 	mch_memmove(save_result + l + 2, string, (size_t)(*length - l - 2));
-	*type = vimenc_atom;
+	if (*target == vimenc_atom)
+	    *type = vimenc_atom;
+	else
+	    *type = vimenc_mt_atom;
     }
     else
     {
 	save_result[0] = motion_type;
 	mch_memmove(save_result + 1, string, (size_t)(*length - 1));
-	*type = vim_atom;
+	if (*target == vim_atom)
+	    *type = vim_atom;
+	else
+	    *type = vim_mt_atom;
     }
     *format = 8;	    // 8 bits per char
     vim_free(string);
@@ -1624,7 +1614,7 @@ clip_x11_notify_cb(Widget w UNUSED, Atom *sel_atom UNUSED, Atom *target UNUSED)
 /*
  * Property callback to get a timestamp for XtOwnSelection.
  */
-# if defined(FEAT_X11) && defined(FEAT_XCLIPBOARD)
+#  if defined(FEAT_X11) && defined(FEAT_XCLIPBOARD)
     static void
 clip_x11_timestamp_cb(
     Widget	w,
@@ -1677,7 +1667,7 @@ x11_setup_selection(Widget w)
     XtAddEventHandler(w, PropertyChangeMask, False,
 	    /*(XtEventHandler)*/clip_x11_timestamp_cb, (XtPointer)NULL);
 }
-# endif
+#  endif
 
     static void
 clip_x11_request_selection_cb(
@@ -1709,13 +1699,13 @@ clip_x11_request_selection_cb(
     }
     p = (char_u *)value;
     len = *length;
-    if (*type == vim_atom)
+    if (*type == vim_atom || *type == vim_mt_atom)
     {
 	motion_type = *p++;
 	len--;
     }
 
-    else if (*type == vimenc_atom)
+    else if (*type == vimenc_atom || *type == vimenc_mt_atom)
     {
 	char_u		*enc;
 	vimconv_T	conv;
@@ -1755,12 +1745,12 @@ clip_x11_request_selection_cb(
 	text_prop.encoding = *type;
 	text_prop.format = *format;
 	text_prop.nitems = len;
-#if defined(X_HAVE_UTF8_STRING)
+#  if defined(X_HAVE_UTF8_STRING)
 	if (*type == utf8_atom)
 	    status = Xutf8TextPropertyToTextList(X_DISPLAY, &text_prop,
 							 &text_list, &n_text);
 	else
-#endif
+#  endif
 	    status = XmbTextPropertyToTextList(X_DISPLAY, &text_prop,
 							 &text_list, &n_text);
 	if (status != Success || n_text < 1)
@@ -1793,21 +1783,23 @@ clip_x11_request_selection(
     time_t	start_time;
     int		timed_out = FALSE;
 
-    for (i = 0; i < 6; i++)
+    for (i = 0; i < 8; i++)
     {
 	switch (i)
 	{
-	    case 0:  type = vimenc_atom;	break;
-	    case 1:  type = vim_atom;		break;
-	    case 2:  type = utf8_atom;		break;
-	    case 3:  type = compound_text_atom; break;
-	    case 4:  type = text_atom;		break;
+	    case 0:  type = vimenc_mt_atom;	break;
+	    case 1:  type = vimenc_atom;	break;
+	    case 2:  type = vim_mt_atom;	break;
+	    case 3:  type = vim_atom;		break;
+	    case 4:  type = utf8_atom;		break;
+	    case 5:  type = compound_text_atom; break;
+	    case 6:  type = text_atom;		break;
 	    default: type = XA_STRING;
 	}
 	if (type == utf8_atom
-# if defined(X_HAVE_UTF8_STRING)
+#  if defined(X_HAVE_UTF8_STRING)
 		&& !enc_utf8
-# endif
+#  endif
 		)
 	    // Only request utf-8 when 'encoding' is utf8 and
 	    // Xutf8TextPropertyToTextList is available.
@@ -1887,7 +1879,7 @@ clip_x11_own_selection(Widget myShell, Clipboard_T *cbd)
     // event.  When in the console we don't get events (the terminal gets
     // them), Get the time by a zero-length append, clip_x11_timestamp_cb will
     // be called with the current timestamp.
-#ifdef FEAT_GUI
+#  ifdef FEAT_GUI
     if (gui.in_use)
     {
 	if (XtOwnSelection(myShell, cbd->sel_atom,
@@ -1897,7 +1889,7 @@ clip_x11_own_selection(Widget myShell, Clipboard_T *cbd)
 	    return FAIL;
     }
     else
-#endif
+#  endif
     {
 	if (!XChangeProperty(XtDisplay(myShell), XtWindow(myShell),
 		  cbd->sel_atom, timestamp_atom, 32, PropModeAppend, NULL, 0))
@@ -1917,9 +1909,10 @@ clip_x11_set_selection(Clipboard_T *cbd UNUSED)
 {
 }
 
-#endif
+# endif
 
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_GUI_X11) || defined(FEAT_GUI_GTK)
+# if (defined(FEAT_XCLIPBOARD) || defined(FEAT_GUI_X11) || defined(FEAT_GUI_GTK)) \
+	&& !defined(USE_GTK4)
 /*
  * Get the contents of the X CUT_BUFFER0 and put it in "cbd".
  */
@@ -1966,7 +1959,7 @@ yank_cut_buffer0(Display *dpy, Clipboard_T *cbd)
 	}
     }
 }
-#endif
+# endif
 
 /*
  * SELECTION / PRIMARY ('*')
@@ -1995,7 +1988,7 @@ yank_cut_buffer0(Display *dpy, Clipboard_T *cbd)
  * 'permanent' of the two), otherwise the PRIMARY one.
  * For now, use a hard-coded sanity limit of 1Mb of data.
  */
-#if defined(FEAT_X11) && defined(FEAT_CLIPBOARD)
+# if defined(FEAT_X11) && defined(FEAT_CLIPBOARD)
     void
 x11_export_final_selection(void)
 {
@@ -2004,16 +1997,16 @@ x11_export_final_selection(void)
     long_u	len = 0;
     int		motion_type = -1;
 
-# ifdef FEAT_GUI
+#  ifdef FEAT_GUI
     if (gui.in_use)
 	dpy = X_DISPLAY;
     else
-# endif
-# ifdef FEAT_XCLIPBOARD
+#  endif
+#  ifdef FEAT_XCLIPBOARD
 	dpy = xterm_dpy;
-# else
+#  else
 	return;
-# endif
+#  endif
 
     // Get selection to export
     if (clip_plus.owned)
@@ -2071,7 +2064,7 @@ x11_export_final_selection(void)
 
     vim_free(str);
 }
-#endif
+# endif
 
     void
 clip_free_selection(Clipboard_T *cbd)
@@ -2097,6 +2090,7 @@ clip_get_selection(Clipboard_T *cbd)
     pos_T	old_cursor;
     pos_T	old_visual;
     int		old_visual_mode;
+    colnr_T	old_virtcol;
     colnr_T	old_curswant;
     int		old_set_curswant;
     pos_T	old_op_start, old_op_end;
@@ -2118,6 +2112,7 @@ clip_get_selection(Clipboard_T *cbd)
 	old_y_previous = get_y_previous();
 	old_y_current = get_y_current();
 	old_cursor = curwin->w_cursor;
+	old_virtcol = curwin->w_virtcol;
 	old_curswant = curwin->w_curswant;
 	old_set_curswant = curwin->w_set_curswant;
 	old_op_start = curbuf->b_op_start;
@@ -2138,7 +2133,8 @@ clip_get_selection(Clipboard_T *cbd)
 	set_y_previous(old_y_previous);
 	set_y_current(old_y_current);
 	curwin->w_cursor = old_cursor;
-	changed_cline_bef_curs();   // need to update w_virtcol et al
+	curwin->w_virtcol = old_virtcol;
+	changed_cline_bef_curs();   // old w_virtcol et al. may be invalid
 	curwin->w_curswant = old_curswant;
 	curwin->w_set_curswant = old_set_curswant;
 	curbuf->b_op_start = old_op_start;
@@ -2179,7 +2175,7 @@ clip_yank_selection(
     str_to_reg(y_ptr, type, str, len, -1, FALSE);
 }
 
-    static int
+    int
 clip_convert_selection_offset(
 	char_u	    **str,
 	long_u	    *len,
@@ -2296,7 +2292,7 @@ may_set_selection(void)
     }
 }
 
-#if defined(FEAT_WAYLAND_CLIPBOARD)
+# if defined(FEAT_WAYLAND_CLIPBOARD)
 
     static clip_wl_selection_T *
 clip_wl_get_selection(wayland_selection_T sel)
@@ -2345,290 +2341,6 @@ clip_wl_get_selection_type(clip_wl_selection_T *sel)
 	return WAYLAND_SELECTION_NONE;
 }
 
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
-/*
- * If globals required for focus stealing method are available.
- */
-    static bool
-clip_wl_focus_stealing_available(void)
-{
-    return wayland_ct->gobjects.wl_compositor != NULL &&
-	wayland_ct->gobjects.wl_shm != NULL &&
-	wayland_ct->gobjects.xdg_wm_base != NULL;
-}
-
-/*
- * Called when compositor isn't using the buffer anymore, we can reuse it
- * again.
- */
-    static void
-wl_buffer_listener_release(
-	void		    *data,
-	struct wl_buffer    *buffer UNUSED)
-{
-    clip_wl_buffer_store_T *store = data;
-
-    store->available = true;
-}
-
-static struct wl_buffer_listener    wl_buffer_listener = {
-    .release	    = wl_buffer_listener_release
-};
-
-/*
- * Destroy a buffer store structure.
- */
-    static void
-clip_wl_destroy_buffer_store(clip_wl_buffer_store_T *store)
-{
-    if (store == NULL)
-	return;
-    if (store->buffer != NULL)
-	wl_buffer_destroy(store->buffer);
-    if (store->pool != NULL)
-	wl_shm_pool_destroy(store->pool);
-
-    close(store->fd);
-
-    vim_free(store);
-}
-
-/*
- * Initialize a buffer and its backing memory pool.
- */
-    static clip_wl_buffer_store_T *
-clip_wl_init_buffer_store(int width, int height)
-{
-    int			    fd, r;
-    clip_wl_buffer_store_T  *store;
-
-    store = alloc(sizeof(*store));
-
-    if (store == NULL)
-	return NULL;
-
-    store->available = false;
-
-    store->width = width;
-    store->height = height;
-    store->stride = store->width * 4;
-    store->size = store->stride * store->height;
-
-    fd = mch_create_anon_file();
-    r = ftruncate(fd, store->size);
-
-    if (r == -1)
-    {
-	if (fd >= 0)
-	    close(fd);
-	return NULL;
-    }
-
-    store->pool = wl_shm_create_pool(
-	    wayland_ct->gobjects.wl_shm,
-	    fd,
-	    store->size);
-    store->buffer = wl_shm_pool_create_buffer(
-	    store->pool,
-	    0,
-	    store->width,
-	    store->height,
-	    store->stride,
-	    WL_SHM_FORMAT_ARGB8888);
-
-    store->fd = fd;
-
-    wl_buffer_add_listener(store->buffer, &wl_buffer_listener, store);
-
-    if (vwl_connection_roundtrip(wayland_ct) == FAIL)
-    {
-	clip_wl_destroy_buffer_store(store);
-	return NULL;
-    }
-
-    store->available = true;
-
-    return store;
-}
-
-/*
- * Configure xdg_surface
- */
-    static void
-xdg_surface_listener_configure(
-	void		    *data UNUSED,
-	struct xdg_surface  *surface,
-	uint32_t	    serial)
-{
-    xdg_surface_ack_configure(surface, serial);
-}
-
-
-static struct xdg_surface_listener  xdg_surface_listener = {
-    .configure = xdg_surface_listener_configure
-};
-
-/*
- * Destroy a focus stealing structure.
- */
-    static void
-clip_wl_destroy_fs_surface(clip_wl_fs_surface_T *store)
-{
-    if (store == NULL)
-	return;
-    if (store->shell.toplevel != NULL)
-	xdg_toplevel_destroy(store->shell.toplevel);
-    if (store->shell.surface != NULL)
-	xdg_surface_destroy(store->shell.surface);
-    if (store->surface != NULL)
-	wl_surface_destroy(store->surface);
-    if (store->keyboard != NULL)
-    {
-	if (wl_keyboard_get_version(store->keyboard) >= 3)
-	    wl_keyboard_release(store->keyboard);
-	else
-	    wl_keyboard_destroy(store->keyboard);
-    }
-    vim_free(store);
-}
-
-VWL_FUNCS_DUMMY_KEYBOARD_EVENTS()
-
-/*
- * Called when the keyboard focus is on our surface
- */
-    static void
-clip_wl_fs_keyboard_listener_enter(
-    void		*data,
-    struct wl_keyboard	*keyboard UNUSED,
-    uint32_t		serial,
-    struct wl_surface	*surface UNUSED,
-    struct wl_array	*keys UNUSED)
-{
-    clip_wl_fs_surface_T *store = data;
-
-    store->got_focus = true;
-
-    if (store->on_focus != NULL)
-	store->on_focus(store->user_data, serial);
-}
-
-
-static struct wl_keyboard_listener  vwl_fs_keyboard_listener = {
-    .enter	    = clip_wl_fs_keyboard_listener_enter,
-    .key	    = clip_wl_fs_keyboard_listener_key,
-    .keymap	    = clip_wl_fs_keyboard_listener_keymap,
-    .leave	    = clip_wl_fs_keyboard_listener_leave,
-    .modifiers	    = clip_wl_fs_keyboard_listener_modifiers,
-    .repeat_info    = clip_wl_fs_keyboard_listener_repeat_info
-};
-
-/*
- * Create an invisible surface in order to gain focus and call on_focus() with
- * serial that was given.
- */
-    static int
-clip_wl_init_fs_surface(
-	vwl_seat_T		*seat,
-	clip_wl_buffer_store_T	*buffer_store,
-	void			(*on_focus)(void *, uint32_t),
-	void			*user_data)
-{
-    clip_wl_fs_surface_T    *store;
-#ifdef ELAPSED_FUNC
-    elapsed_T		    start_tv;
-#endif
-
-    if (wayland_ct->gobjects.wl_compositor == NULL
-	    || wayland_ct->gobjects.xdg_wm_base == NULL
-	    || buffer_store == NULL
-	    || seat == NULL)
-	return FAIL;
-
-    store = ALLOC_CLEAR_ONE(clip_wl_fs_surface_T);
-
-    if (store == NULL)
-	return FAIL;
-
-    // Get keyboard
-    store->keyboard = vwl_seat_get_keyboard(seat);
-
-    if (store->keyboard == NULL)
-	goto fail;
-
-    wl_keyboard_add_listener(store->keyboard, &vwl_fs_keyboard_listener, store);
-
-    if (vwl_connection_dispatch(wayland_ct) < 0)
-	goto fail;
-
-    store->surface = wl_compositor_create_surface(
-	    wayland_ct->gobjects.wl_compositor);
-    store->shell.surface = xdg_wm_base_get_xdg_surface(
-	    wayland_ct->gobjects.xdg_wm_base, store->surface);
-    store->shell.toplevel = xdg_surface_get_toplevel(store->shell.surface);
-
-    xdg_toplevel_set_title(store->shell.toplevel, "Vim clipboard");
-
-    xdg_surface_add_listener(store->shell.surface,
-	    &xdg_surface_listener, NULL);
-
-    wl_surface_commit(store->surface);
-
-    store->on_focus = on_focus;
-    store->user_data = user_data;
-    store->got_focus = FALSE;
-
-    if (vwl_connection_roundtrip(wayland_ct) == FAIL)
-	goto fail;
-
-    // We may get the enter event early, if we do then we will set `got_focus`
-    // to TRUE.
-    if (store->got_focus)
-	goto early_exit;
-
-    // Buffer hasn't been released yet, abort. This shouldn't happen but still
-    // check for it.
-    if (!buffer_store->available)
-	goto fail;
-
-    buffer_store->available = false;
-
-    wl_surface_attach(store->surface, buffer_store->buffer, 0, 0);
-    wl_surface_damage(store->surface, 0, 0,
-	    buffer_store->width, buffer_store->height);
-    wl_surface_commit(store->surface);
-
-    // Dispatch events until we receive the enter event. Add a max delay of
-    // 'p_wtm' when waiting for it (may be longer depending on how long we poll
-    // when dispatching events)
-#ifdef ELAPSED_FUNC
-    ELAPSED_INIT(start_tv);
-#endif
-
-    while (vwl_connection_dispatch(wayland_ct) >= 0)
-    {
-	if (store->got_focus)
-	    break;
-
-#ifdef ELAPSED_FUNC
-	if (ELAPSED_FUNC(start_tv) >= p_wtm)
-	    goto fail;
-#endif
-    }
-early_exit:
-    clip_wl_destroy_fs_surface(store);
-    vwl_connection_flush(wayland_ct);
-
-    return OK;
-fail:
-    clip_wl_destroy_fs_surface(store);
-    vwl_connection_flush(wayland_ct);
-
-    return FAIL;
-}
-
-#endif // FEAT_WAYLAND_CLIPBOARD_FS
-
     static bool
 wl_data_offer_listener_event_offer(
     void *data UNUSED,
@@ -2672,7 +2384,7 @@ vwl_data_device_listener_event_selection(
     // There are two cases when sel->offer is NULL
     // 1. No one owns the selection
     // 2. We own the selection (we'll just access the register directly)
-    if (offer == NULL || offer->from_vim)
+    if (offer == NULL || sel->source != NULL)
     {
 	// Selection event is from us, so we are the source client. Therefore
 	// ignore it. Or the selection is cleared, so set sel->offer to NULL
@@ -2795,23 +2507,6 @@ clip_init_wayland(void)
 	clip_wl.primary.device = clip_wl.regular.device;
     }
 
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
-    if (clip_wl.regular.available
-	    && clip_wl.regular.manager->protocol == VWL_DATA_PROTOCOL_CORE
-	    && clip_wl_focus_stealing_available())
-	clip_wl.regular.requires_focus = true;
-    if (clip_wl.primary.available
-	    && clip_wl.primary.manager->protocol == VWL_DATA_PROTOCOL_PRIMARY
-	    && clip_wl_focus_stealing_available())
-	clip_wl.primary.requires_focus = true;
-
-    if (clip_wl.regular.requires_focus || clip_wl.primary.requires_focus)
-    {
-	// Initialize buffer to use for focus stealing
-	clip_wl.fs_buffer = clip_wl_init_buffer_store(1, 1);
-    }
-#endif
-
     if (!clip_wl.regular.available && !clip_wl.primary.available)
 	return FAIL;
 
@@ -2840,10 +2535,6 @@ clip_uninit_wayland(void)
 	if (clip_plus.owned)
 	    clip_lose_selection(&clip_plus);
     }
-
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
-    clip_wl_destroy_buffer_store(clip_wl.fs_buffer);
-#endif
 
     // Don't want to double free
     if (clip_wl.regular.manager != clip_wl.primary.manager)
@@ -2883,28 +2574,31 @@ clip_reset_wayland(void)
     return OK;
 }
 
+
 /*
  * Read data from a file descriptor and write it to the given clipboard.
  */
     static void
 clip_wl_receive_data(Clipboard_T *cbd, const char *mime_type, int fd)
 {
-    char_u	*start, *final, *enc;
+    char_u	*start, *final;
+    long	len;
     garray_T	buf;
     int		motion_type = MAUTO;
     ssize_t	r = 0;
-#ifndef HAVE_SELECT
+    char_u	*tofree = NULL;
+#  ifndef HAVE_SELECT
     struct pollfd   pfd;
 
     pfd.fd = fd;
     pfd.events = POLLIN;
-#else
+#  else
     fd_set rfds;
     struct timeval  tv;
 
     FD_ZERO(&rfds);
     FD_SET(fd, &rfds);
-#endif
+#  endif
 
     // Make pipe (read end) non-blocking
     if (fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) == -1)
@@ -2919,12 +2613,12 @@ clip_wl_receive_data(Clipboard_T *cbd, const char *mime_type, int fd)
 
     start = buf.ga_data;
 
-#ifndef HAVE_SELECT
+#  ifndef HAVE_SELECT
     while (poll(&pfd, 1, p_wtm) > 0)
-#else
+#  else
     while (tv.tv_sec = p_wtm / 1000, tv.tv_usec = (p_wtm % 1000) * 1000,
 	    select(fd + 1, &rfds, NULL, NULL, &tv) > 0)
-#endif
+#  endif
     {
 	r = read(fd, start, buf.ga_maxlen - 1 - buf.ga_len);
 
@@ -2957,47 +2651,16 @@ clip_wl_receive_data(Clipboard_T *cbd, const char *mime_type, int fd)
     }
 
     final = buf.ga_data;
+    len = buf.ga_len;
 
-    if (STRCMP(mime_type, VIM_ATOM_NAME) == 0 && buf.ga_len >= 2)
-    {
-	motion_type = *final++;;
-	buf.ga_len--;
-    }
-    else if (STRCMP(mime_type, VIMENC_ATOM_NAME) == 0 && buf.ga_len >= 3)
-    {
-	vimconv_T   conv;
-	int	    convlen;
-
-	// first byte is motion type
-	motion_type = *final++;
-	buf.ga_len--;
-
-	// Get encoding of selection
-	enc = final;
-
-	// Skip the encoding type including null terminator in final text
-	final += STRLEN(final) + 1;
-
-	// Subtract pointers to get length of encoding;
-	buf.ga_len -= final - enc;
-
-	conv.vc_type = CONV_NONE;
-	convert_setup(&conv, enc, p_enc);
-	if (conv.vc_type != CONV_NONE)
-	{
-	   char_u *tmp;
-
-	   convlen = buf.ga_len;
-	   tmp = string_convert(&conv, final, &convlen);
-	   buf.ga_len = convlen;
-	   if (tmp != NULL)
-		final = tmp;
-	   convert_setup(&conv, NULL, NULL);
-	}
-    }
-
-    clip_yank_selection(motion_type, final, (long)buf.ga_len, cbd);
+    if (clip_convert_data(&final, &len, &motion_type,
+	    STRCMP(mime_type, VIM_ATOM_NAME) == 0
+	    || STRCMP(mime_type, VIM_MIMETYPE_NAME) == 0,
+	    STRCMP(mime_type, VIMENC_ATOM_NAME) == 0
+	    || STRCMP(mime_type, VIMENC_MIMETYPE_NAME) == 0, &tofree) == OK)
+	clip_yank_selection(motion_type, final, len, cbd);
     ga_clear(&buf);
+    vim_free(tofree);
 }
 
 /*
@@ -3016,23 +2679,10 @@ clip_wl_request_selection(Clipboard_T *cbd)
     if (!sel->available)
 	goto clear;
 
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
-    if (sel->requires_focus)
-    {
-	// We don't care about the on_focus callback since once we gain
-	// focus the data offer events will come immediately.
-	if (clip_wl_init_fs_surface(clip_wl.seat,
-		    clip_wl.fs_buffer, NULL, NULL) == FAIL)
-	    goto clear;
-    }
-    else
-#endif
-    {
-	// Dispatch any events that still queued up before checking for a data
-	// offer.
-	if (vwl_connection_roundtrip(wayland_ct) == FAIL)
-	    goto clear;
-    }
+    // Dispatch any events that still queued up before checking for a data
+    // offer.
+    if (vwl_connection_roundtrip(wayland_ct) == FAIL)
+	goto clear;
 
     if (sel->offer == NULL)
 	goto clear;
@@ -3086,18 +2736,18 @@ vwl_data_source_listener_event_send(
     int			offset = 0;
     bool		is_vim, is_vimenc;
     size_t		total = 0;
-#ifndef HAVE_SELECT
+#  ifndef HAVE_SELECT
     struct pollfd   pfd;
 
     pfd.fd = fd;
     pfd.events = POLLOUT;
-#else
+#  else
     fd_set	    wfds;
     struct timeval  tv;
 
     FD_ZERO(&wfds);
     FD_SET(fd, &wfds);
-#endif
+#  endif
 
     // Check if we actually have mime type
     for (int i = 0; i < (int)ARRAY_LENGTH(supported_mimes); i++)
@@ -3114,8 +2764,10 @@ vwl_data_source_listener_event_send(
     // format, after the first byte is the encoding type, which is null
     // terminated.
 
-    is_vimenc = STRCMP(mime_type, VIMENC_ATOM_NAME) == 0;
-    is_vim = STRCMP(mime_type, VIM_ATOM_NAME) == 0;
+    is_vimenc = STRCMP(mime_type, VIMENC_ATOM_NAME) == 0
+	|| STRCMP(mime_type, VIMENC_MIMETYPE_NAME) == 0;
+    is_vim = STRCMP(mime_type, VIM_ATOM_NAME) == 0
+	|| STRCMP(mime_type, VIM_MIMETYPE_NAME) == 0;
 
     if (is_vimenc)
 	offset += 2 + STRLEN(p_enc);
@@ -3131,20 +2783,20 @@ vwl_data_source_listener_event_send(
     if (is_vimenc)
     {
 	string[0] = (char_u)motion_type;
-	// strcpy copies the NUL terminator too
-	strcpy((char *)string + 1, (char *)p_enc);
+	// Use vim_strncpy for safer copying
+	vim_strncpy(string + 1, p_enc, STRLEN(p_enc));
     }
     else if (is_vim)
 	string[0] = (char_u)motion_type;
 
 
     while (total < (size_t)length &&
-#ifndef HAVE_SELECT
+#  ifndef HAVE_SELECT
 	    poll(&pfd, 1, p_wtm) > 0)
-#else
+#  else
 	    ((tv.tv_sec = p_wtm / 1000, tv.tv_usec = (p_wtm % 1000) * 1000),
 	    select(fd + 1, NULL, &wfds, NULL, &tv) > 0))
-#endif
+#  endif
     {
 	ssize_t w = write(fd, string + total, length - total);
 
@@ -3229,21 +2881,11 @@ clip_wl_own_selection(Clipboard_T *cbd)
     vwl_data_source_add_listener(sel->source, &vwl_data_source_listener, sel);
 
     // Advertise mime types
-    vwl_data_source_offer(sel->source, wayland_vim_special_mime);
     for (int i = 0; i < (int)ARRAY_LENGTH(supported_mimes); i++)
 	vwl_data_source_offer(sel->source, supported_mimes[i]);
 
     sel->own_success = false;
-#ifdef FEAT_WAYLAND_CLIPBOARD_FS
-    if (sel->requires_focus)
-    {
-	if (clip_wl_init_fs_surface(clip_wl.seat, clip_wl.fs_buffer,
-		    clip_wl_do_set_selection, sel) == FAIL)
-	    goto fail;
-    }
-    else
-#endif
-	clip_wl_do_set_selection(sel, 0);
+    clip_wl_do_set_selection(sel, 0);
 
     if (!sel->own_success)
 	goto fail;
@@ -3279,7 +2921,7 @@ clip_wl_set_selection(Clipboard_T *cbd UNUSED)
 {
 }
 
-#if defined(USE_SYSTEM)
+#  if defined(USE_SYSTEM)
 /*
  * Return true if we own the selection corresponding to cbd or another client
  * does.
@@ -3294,9 +2936,9 @@ clip_wl_owner_exists(Clipboard_T *cbd)
 
     return sel->available && (sel->source != NULL || sel->offer != NULL);
 }
-#endif
+#  endif
 
-#endif // FEAT_WAYLAND_CLIPBOARD
+# endif // FEAT_WAYLAND_CLIPBOARD
 
 #endif // FEAT_CLIPBOARD
 
@@ -3326,23 +2968,23 @@ get_clipmethod(char_u *str)
 
 	if (STRCMP(buf, "wayland") == 0)
 	{
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
 	    if (!gui.in_use)
-#endif
+# endif
 	    {
-#ifdef FEAT_WAYLAND_CLIPBOARD
+# ifdef FEAT_WAYLAND_CLIPBOARD
 		if (clip_wl.regular.available || clip_wl.primary.available)
 		    method = CLIPMETHOD_WAYLAND;
-#endif
+# endif
 	    }
 	}
 	else if (STRCMP(buf, "x11") == 0)
 	{
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
 	    if (!gui.in_use)
-#endif
+# endif
 	    {
-#ifdef FEAT_XCLIPBOARD
+# ifdef FEAT_XCLIPBOARD
 		// x_IOerror_handler() in os_unix.c should set xterm_dpy to NULL if
 		// we lost connection to the X server.
 		if (xterm_dpy != NULL)
@@ -3354,12 +2996,12 @@ get_clipmethod(char_u *str)
 		    xterm_update();
 		    method = CLIPMETHOD_X11;
 		}
-#endif
+# endif
 	    }
 	}
 	else
 	{
-#ifdef FEAT_CLIPBOARD_PROVIDER
+# ifdef FEAT_CLIPBOARD_PROVIDER
 	    // Check if name matches a clipboard provider
 	    int r = clip_provider_is_available(buf);
 
@@ -3375,11 +3017,11 @@ get_clipmethod(char_u *str)
 		}
 	    }
 	    else if (r == -1)
-#endif
+# endif
 	    {
-#ifdef FEAT_CLIPBOARD_PROVIDER
+# ifdef FEAT_CLIPBOARD_PROVIDER
 fail:
-#endif
+# endif
 		ret = CLIPMETHOD_FAIL;
 		goto exit;
 	    }
@@ -3412,9 +3054,9 @@ clipmethod_to_str(clipmethod_T method)
 	case CLIPMETHOD_X11:
 	    return (char_u *)"x11";
 	case CLIPMETHOD_PROVIDER:
-#ifdef FEAT_EVAL
+# ifdef FEAT_EVAL
 	    return clip_provider;
-#endif
+# endif
 	default:
 	    return (char_u *)"none";
     }
@@ -3435,34 +3077,34 @@ choose_clipmethod(void)
 // If GUI is running or we are not on a system with Wayland or X11, then always
 // return CLIPMETHOD_NONE. System or GUI clipboard handling always overrides.
 // This is unless a provider is being used.
-#if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
-# if defined(FEAT_GUI)
+# if defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)
+#  if defined(FEAT_GUI)
     if (method != CLIPMETHOD_PROVIDER && gui.in_use)
     {
-#  ifdef FEAT_WAYLAND
+#   ifdef FEAT_WAYLAND
 	// We only interact with Wayland for the clipboard, we can just deinit
 	// everything.
 	wayland_uninit_connection();
-#  endif
+#   endif
 
 	method = CLIPMETHOD_NONE;
 	goto lose_sel_exit;
     }
-# endif
-#else
+#  endif
+# else
     // If on a system like windows or macos, then clipmethod is irrelevant, we
     // use their way of accessing the clipboard. This is unless we are using the
     // clipboard provider
-#ifdef FEAT_CLIPBOARD_PROVIDER
+#  ifdef FEAT_CLIPBOARD_PROVIDER
     if (method != CLIPMETHOD_PROVIDER)
-#endif
+#  endif
     {
 	method = CLIPMETHOD_NONE;
 	goto exit;
     }
-#endif
+# endif
 
-#ifdef FEAT_CLIPBOARD
+# ifdef FEAT_CLIPBOARD
     // Deinitialize clipboard if there is no way to access clipboard
     if (method == CLIPMETHOD_NONE)
 	clip_init(FALSE);
@@ -3475,34 +3117,34 @@ choose_clipmethod(void)
     // Disown clipboard if we are switching to a new method
     else if (clipmethod != CLIPMETHOD_NONE && method != clipmethod)
     {
-#if (defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)) \
+#  if (defined(FEAT_XCLIPBOARD) || defined(FEAT_WAYLAND_CLIPBOARD)) \
 	&& defined(FEAT_GUI)
 lose_sel_exit:
-#endif
+#  endif
 	if (clip_star.owned)
 	    clip_lose_selection(&clip_star);
 	if (clip_plus.owned)
 	    clip_lose_selection(&clip_plus);
 
-#if defined(FEAT_GUI)
+#  if defined(FEAT_GUI)
 	if (!gui.in_use)
-#endif
+#  endif
 	{
 	    clip_init(TRUE);
 	    did_warn_clipboard = false;
 	}
     }
-#endif // FEAT_CLIPBOARD
+# endif // FEAT_CLIPBOARD
 
-#if !defined(FEAT_XCLIPBOARD) && !defined(FEAT_WAYLAND_CLIPBOARD)
+# if !defined(FEAT_XCLIPBOARD) && !defined(FEAT_WAYLAND_CLIPBOARD)
 exit:
-#endif
+# endif
 
     clipmethod = method;
 
-#ifdef FEAT_EVAL
+# ifdef FEAT_EVAL
     set_vim_var_string(VV_CLIPMETHOD, (char_u*)clipmethod_to_str(method), -1);
-#endif
+# endif
 
     return NULL;
 }
@@ -3531,15 +3173,15 @@ ex_clipreset(exarg_T *eap UNUSED)
     void
 adjust_clip_reg(int *rp)
 {
-#ifdef FEAT_CLIPBOARD_PROVIDER
+# ifdef FEAT_CLIPBOARD_PROVIDER
     if (clipmethod == CLIPMETHOD_PROVIDER)
     {
 	if (*rp == 0 && clip_unnamed != 0)
 	    *rp = ((clip_unnamed & CLIP_UNNAMED_PLUS)) ? '+' : '*';
 	return;
     }
-#endif
-#ifdef FEAT_CLIPBOARD
+# endif
+# ifdef FEAT_CLIPBOARD
     // If no reg. specified, and "unnamed" or "unnamedplus" is in 'clipboard',
     // use '*' or '+' reg, respectively. "unnamedplus" prevails.
     if (*rp == 0 && (clip_unnamed != 0 || clip_unnamed_saved != 0))
@@ -3557,7 +3199,7 @@ adjust_clip_reg(int *rp)
 	msg_warn_missing_clipboard();
 	*rp = 0;
     }
-#endif
+# endif
 }
 
 /*
@@ -3568,12 +3210,12 @@ adjust_clip_reg(int *rp)
 did_set_clipboard(optset_T *args UNUSED)
 {
     int		new_unnamed = 0;
-#ifdef FEAT_CLIPBOARD
+# ifdef FEAT_CLIPBOARD
     int		new_autoselect_star = FALSE;
     int		new_autoselect_plus = FALSE;
     int		new_autoselectml = FALSE;
     int		new_html = FALSE;
-#endif
+# endif
     regprog_T	*new_exclude_prog = NULL;
     char	*errmsg = NULL;
     char_u	*p;
@@ -3592,7 +3234,7 @@ did_set_clipboard(optset_T *args UNUSED)
 	    new_unnamed |= CLIP_UNNAMED_PLUS;
 	    p += 11;
 	}
-#ifdef FEAT_CLIPBOARD
+# ifdef FEAT_CLIPBOARD
 	else if (STRNCMP(p, "autoselect", 10) == 0
 					    && (p[10] == ',' || p[10] == NUL))
 	{
@@ -3624,7 +3266,7 @@ did_set_clipboard(optset_T *args UNUSED)
 		errmsg = e_invalid_argument;
 	    break;
 	}
-#endif
+# endif
 	else
 	{
 	    errmsg = e_invalid_argument;
@@ -3635,30 +3277,30 @@ did_set_clipboard(optset_T *args UNUSED)
     }
     if (errmsg == NULL)
     {
-#ifdef FEAT_CLIPBOARD
+# ifdef FEAT_CLIPBOARD
 	if (global_busy)
 	    // clip_unnamed will be reset to clip_unnamed_saved
 	    // at end_global_changes
 	    clip_unnamed_saved = new_unnamed;
 	else
-#endif
+# endif
 	    clip_unnamed = new_unnamed;
-#ifdef FEAT_CLIPBOARD
+# ifdef FEAT_CLIPBOARD
 	clip_autoselect_star = new_autoselect_star;
 	clip_autoselect_plus = new_autoselect_plus;
 	clip_autoselectml = new_autoselectml;
 	clip_html = new_html;
 	vim_regfree(clip_exclude_prog);
 	clip_exclude_prog = new_exclude_prog;
-#endif
-#ifdef FEAT_GUI_GTK
+# endif
+# if defined(FEAT_GUI_GTK) && !defined(USE_GTK4)
 	if (gui.in_use)
 	{
 	    gui_gtk_set_selection_targets((GdkAtom)GDK_SELECTION_PRIMARY);
 	    gui_gtk_set_selection_targets((GdkAtom)clip_plus.gtk_sel_atom);
 	    gui_gtk_set_dnd_targets();
 	}
-#endif
+# endif
     }
     else
 	vim_regfree(new_exclude_prog);
@@ -3774,7 +3416,6 @@ clip_provider_get_callback(
 
     // func_tv owns the function name, so we must make a copy for the callback
     set_callback(callback, &cb);
-    free_callback(&cb);
     clear_tv(&func_tv);
     return OK;
 }
@@ -3782,12 +3423,16 @@ clip_provider_get_callback(
     static void
 clip_provider_copy(char_u *reg, char_u *provider)
 {
+    static bool	recursive = false;
     callback_T	callback;
     typval_T	rettv;
     typval_T	argvars[4];
     yankreg_T	*y_ptr;
     char_u	type[2 + NUMBUFLEN] = {0};
     list_T	*list = NULL;
+
+    if (recursive)
+	return;
 
     if (clip_provider_get_callback(
 		reg,
@@ -3834,7 +3479,8 @@ clip_provider_copy(char_u *reg, char_u *provider)
     }
 
     for (int i = 0; i < y_ptr->y_size; i++)
-	if (list_append_string(list, y_ptr->y_array[i].string, -1) == FAIL)
+	if (list_append_string(list, y_ptr->y_array[i].string,
+	    (int)y_ptr->y_array[i].length) == FAIL)
 	{
 	    free_callback(&callback);
 	    list_unref(list);
@@ -3850,7 +3496,9 @@ clip_provider_copy(char_u *reg, char_u *provider)
     argvars[3].v_type = VAR_UNKNOWN;
 
     textlock++;
+    recursive = true;
     call_callback(&callback, -1, &rettv, 3, argvars);
+    recursive = false;
     clear_tv(&rettv);
     textlock--;
 
@@ -3861,12 +3509,16 @@ clip_provider_copy(char_u *reg, char_u *provider)
     static void
 clip_provider_paste(char_u *reg, char_u *provider)
 {
+    static bool	recursive = false;
     callback_T	callback;
     typval_T	argvars[2];
     typval_T	rettv;
     int		ret;
     char_u	*reg_type;
     list_T	*lines;
+
+    if (recursive)
+	return;
 
     if (clip_provider_get_callback(
 		reg,
@@ -3881,7 +3533,9 @@ clip_provider_paste(char_u *reg, char_u *provider)
     argvars[1].v_type = VAR_UNKNOWN;
 
     textlock++;
+    recursive = true;
     ret = call_callback(&callback, -1, &rettv, 1, argvars);
+    recursive = false;
     textlock--;
 
     if (ret == FAIL)
@@ -3952,7 +3606,7 @@ clip_provider_paste(char_u *reg, char_u *provider)
 	}
 	*curval++ = NULL;
 
-	if (*reg_type != NUL && (STRLEN(reg_type) <= 0
+	if (*reg_type != NUL && (STRLEN(reg_type) == 0
 		|| get_yank_type(&reg_type, &yank_type, &block_len) == FAIL))
 	{
 	    emsg(e_invalid_argument);
@@ -4070,3 +3724,72 @@ dec_clip_provider(void)
 }
 
 #endif // FEAT_CLIPBOARD_PROVIDER
+
+#if defined(FEAT_WAYLAND_CLIPBOARD) || (defined(FEAT_GUI_GTK) && defined(USE_GTK4))
+/*
+ * If "vim" is TRUE, then get the motion type. If "vimenc" is TRUE, then get the
+ * motion type and also convert "*buf". "buf" and "len_store" will be updated to
+ * reflect the actual contents, but should be set beforehand with the initial
+ * contents. Returns OK on success and FAIL on failure.
+ */
+    int
+clip_convert_data(
+	char_u	**buf,
+	long	*len_store,
+	int	*motion,
+	bool	vim,
+	bool	vimenc,
+	char_u	**tofree)
+{
+    char_u  *final = *buf;
+    char_u  *enc;
+    long    len = *len_store;
+
+    if (vim && len >= 2)
+    {
+	*motion = *final++;
+	len--;
+    }
+    else if (vimenc && len >= 3)
+    {
+	vimconv_T   conv;
+	int	    convlen;
+
+	// First byte is motion type
+	*motion = *final++;
+	len--;
+
+	// Get encoding of selection
+	enc = final;
+
+	// Skip the encoding type including null terminator in final text
+	final = memchr(final, NUL, len);
+	if (final == NULL)
+	    return FAIL;
+	final++; // Skip NUL
+
+	// Subtract pointers to get length of encoding;
+	len -= final - enc;
+
+	conv.vc_type = CONV_NONE;
+	convert_setup(&conv, enc, p_enc);
+	if (conv.vc_type != CONV_NONE)
+	{
+	   char_u *tmp;
+
+	   convlen = len;
+	   tmp = string_convert(&conv, final, &convlen);
+	   len = convlen;
+	   if (tmp != NULL)
+	   {
+		final = tmp;
+		*tofree = final;
+	   }
+	   convert_setup(&conv, NULL, NULL);
+	}
+    }
+    *buf = final;
+    *len_store = len;
+    return OK;
+}
+#endif

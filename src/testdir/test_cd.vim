@@ -189,6 +189,27 @@ func Test_lcd_split()
   quit!
 endfunc
 
+" Test that a temporary override of 'autochdir' via :lcd isn't clobbered by win_execute() in a split window.
+func Test_lcd_win_execute()
+  CheckOption autochdir
+
+  let startdir = getcwd()
+  call mkdir('Xsubdir', 'R')
+  call test_autochdir()
+  set autochdir
+  edit Xsubdir/file
+  call assert_match('testdir.Xsubdir.file$', expand('%:p'))
+  split
+  lcd ..
+  call assert_match('testdir.Xsubdir.file$', expand('%:p'))
+  call win_execute(win_getid(2), "")
+  call assert_match('testdir.Xsubdir.file$', expand('%:p'))
+
+  set noautochdir
+  bwipe!
+  call chdir(startdir)
+endfunc
+
 func Test_cd_from_non_existing_dir()
   CheckNotMSWindows
 
@@ -242,7 +263,7 @@ func Test_cd_completion()
         let dir = d
         " Yay! We found a suitable dir!
         break
-      catch /:E472:/
+      catch /:\(E472\|E344\):/
         " Just skip directories where "cd" fails
         continue
       finally
@@ -261,22 +282,28 @@ func Test_cd_completion()
     let drive = full[0]
     call chdir(saved_cwd)
 
+    " Spaces are escaped in command line completion. Next, in assert_match(),
+    " the backslash added by the first escape also needs to be escaped
+    " separately, so the escape is doubled.
+    let want_full = escape(escape(full, ' '), '\')
+    let want_dir = escape(escape(dir, ' '), '\')
+
     for cmd in ['cd', 'chdir', 'lcd', 'lchdir', 'tcd', 'tchdir']
       for sep in [ '/', '\']
 
         " Explicit drive letter
         call feedkeys(':' .. cmd .. ' ' .. drive .. ':' .. sep ..
                      \  partial .. "\<C-A>\<C-B>\"\<CR>", 'tx')
-        call assert_match(full, @:)
+        call assert_match(want_full, @:)
 
         " Implicit drive letter
         call feedkeys(':' .. cmd .. ' ' .. sep .. partial .. "\<C-A>\<C-B>\"\<CR>", 'tx')
-        call assert_match('/' .. dir .. '/', @:)
+        call assert_match('/' .. want_dir .. '/', @:)
 
         " UNC path
         call feedkeys(':' .. cmd .. ' ' .. sep .. sep .. $COMPUTERNAME .. sep ..
                      \ drive .. '$' .. sep .. partial .."\<C-A>\<C-B>\"\<CR>", 'tx')
-        call assert_match('//' .. $COMPUTERNAME .. '/' .. drive .. '$/' .. dir .. '/' , @:)
+        call assert_match('//' .. $COMPUTERNAME .. '/' .. drive .. '$/' .. want_dir .. '/' , @:)
 
       endfor
     endfor
@@ -380,6 +407,17 @@ func Test_cd_symlinks()
   call delete('Xdest', 'rf')
   call delete('Xsource', 'rf')
   call chdir(savedir)
+endfunc
+
+func Test_cd_shorten_bufname_with_duplicate_slashes()
+  let savedir = getcwd()
+  call mkdir('Xexistingdir', 'R')
+  new Xexistingdir//foo/bar
+  cd Xexistingdir
+  call assert_equal('foo/bar', bufname('%'))
+
+  call chdir(savedir)
+  bwipe!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab
