@@ -14,6 +14,7 @@ SRC_ALL =	\
 		.github/workflows/ci-windows.yml \
 		.github/workflows/ci.yml \
 		.github/workflows/codeql-analysis.yml \
+		.github/workflows/coverity.yml \
 		.github/workflows/link-check.yml \
 		.github/actions/build_vim_on_linux/action.yml \
 		.github/actions/test_artifacts/action.yml \
@@ -33,6 +34,7 @@ SRC_ALL =	\
 		ci/ddebs.list \
 		ci/pinned-pkgs \
 		src/Make_all.mak \
+		src/Make_tags.mak \
 		src/README.md \
 		src/alloc.c \
 		src/alloc.h \
@@ -91,6 +93,11 @@ SRC_ALL =	\
 		src/gui.h \
 		src/gui_beval.c \
 		src/hardcopy.c \
+		src/hardcopy.h \
+		src/hardcopy_pango.c \
+		src/hardcopy_pango.h \
+		src/hardcopy_postscript.c \
+		src/hardcopy_postscript.h \
 		src/hashtab.c \
 		src/help.c \
 		src/highlight.c \
@@ -517,6 +524,8 @@ SRC_UNIX =	\
 		src/gui_gtk4_da.h \
 		src/gui_gtk4_tb.c \
 		src/gui_gtk4_tb.h \
+		src/gui_gtk4_menu.c \
+		src/gui_gtk4_menu.h \
 		src/gui_gtk_res.xml \
 		src/gui_motif.c \
 		src/gui_xmdlg.c \
@@ -662,13 +671,7 @@ SRC_DOS =	\
 		src/tee/tee.c \
 		src/xxd/Make_ming.mak \
 		src/xxd/Make_mvc.mak \
-		nsis/auxiliary.nsh \
-		nsis/gvim.nsi \
-		nsis/Makefile \
-		nsis/Make_mvc.mak \
 		nsis/README.txt \
-		nsis/lang/*.nsi \
-		nsis/lang/README.txt \
 		uninstall.txt \
 
 # Source files for MS Windows without CR/LF translation (also in the extra archive).
@@ -686,7 +689,6 @@ SRC_DOS_BIN =	\
 		src/xpm/x86/lib-vc14/libXpm.lib \
 		src/xpm/x86/lib/libXpm.a \
 		runtime/bitmaps/vim.ico \
-		nsis/icons.zip \
 
 # Source files for Amiga, DOS, etc. (also in the extra archive).
 SRC_AMI_DOS =	\
@@ -1137,6 +1139,7 @@ LANG_GEN = \
 		runtime/doc/*-sv.UTF-8.1 \
 		runtime/doc/*-tr.1 \
 		runtime/doc/*-tr.UTF-8.1 \
+		runtime/doc/*-zh_CN.UTF-8.1 \
 		runtime/lang/README.txt \
 		runtime/lang/Makefile \
 		runtime/lang/Make_all.mak \

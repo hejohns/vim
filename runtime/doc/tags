@@ -1514,6 +1514,7 @@ $quote	eval.txt	/*$quote*
 +num64	various.txt	/*+num64*
 +ole	various.txt	/*+ole*
 +packages	various.txt	/*+packages*
++pango	various.txt	/*+pango*
 +path_extra	various.txt	/*+path_extra*
 +perl	various.txt	/*+perl*
 +perl/dyn	various.txt	/*+perl\/dyn*
@@ -4015,6 +4016,7 @@ $quote	eval.txt	/*$quote*
 ?<CR>	pattern.txt	/*?<CR>*
 ??	eval.txt	/*??*
 @	repeat.txt	/*@*
+@#	change.txt	/*@#*
 @/	change.txt	/*@\/*
 @:	repeat.txt	/*@:*
 @=	change.txt	/*@=*
@@ -7634,6 +7636,7 @@ ft-log-syntax	syntax.txt	/*ft-log-syntax*
 ft-lpc-syntax	syntax.txt	/*ft-lpc-syntax*
 ft-lua-plugin	filetype.txt	/*ft-lua-plugin*
 ft-lua-syntax	syntax.txt	/*ft-lua-syntax*
+ft-luau-plugin	filetype.txt	/*ft-luau-plugin*
 ft-mail-plugin	filetype.txt	/*ft-mail-plugin*
 ft-mail.vim	syntax.txt	/*ft-mail.vim*
 ft-make-syntax	syntax.txt	/*ft-make-syntax*
@@ -7898,6 +7901,7 @@ g:lf_shell_syntax	syntax.txt	/*g:lf_shell_syntax*
 g:lua_folding	filetype.txt	/*g:lua_folding*
 g:lua_subversion	filetype.txt	/*g:lua_subversion*
 g:lua_version	filetype.txt	/*g:lua_version*
+g:luau_folding	filetype.txt	/*g:luau_folding*
 g:markdown_fenced_languages	syntax.txt	/*g:markdown_fenced_languages*
 g:markdown_minlines	syntax.txt	/*g:markdown_minlines*
 g:markdown_syntax_conceal	syntax.txt	/*g:markdown_syntax_conceal*
@@ -8052,6 +8056,7 @@ g:typst_conceal	filetype.txt	/*g:typst_conceal*
 g:typst_embedded_languages	syntax.txt	/*g:typst_embedded_languages*
 g:typst_folding	filetype.txt	/*g:typst_folding*
 g:typst_foldnested	filetype.txt	/*g:typst_foldnested*
+g:typst_recommended_style	filetype.txt	/*g:typst_recommended_style*
 g:var	eval.txt	/*g:var*
 g:vim_indent	indent.txt	/*g:vim_indent*
 g:vim_indent_cont	indent.txt	/*g:vim_indent_cont*
@@ -8071,7 +8076,7 @@ g:zipPlugin_ext	pi_zip.txt	/*g:zipPlugin_ext*
 g:zip_exec	pi_zip.txt	/*g:zip_exec*
 g:zip_extractcmd	pi_zip.txt	/*g:zip_extractcmd*
 g:zip_nomax	pi_zip.txt	/*g:zip_nomax*
-g:zip_shq	pi_zip.txt	/*g:zip_shq*
+g:zip_pwsh	pi_zip.txt	/*g:zip_pwsh*
 g:zip_unzipcmd	pi_zip.txt	/*g:zip_unzipcmd*
 g:zip_zipcmd	pi_zip.txt	/*g:zip_zipcmd*
 g;	motion.txt	/*g;*
@@ -8257,7 +8262,8 @@ gt	tabpage.txt	/*gt*
 gtk-css	gui_x11.txt	/*gtk-css*
 gtk-tooltip-colors	gui_x11.txt	/*gtk-tooltip-colors*
 gtk3-slow	gui_x11.txt	/*gtk3-slow*
-gtk4-hwaccel	gui_x11.txt	/*gtk4-hwaccel*
+gtk4-menu-navigation	gui_x11.txt	/*gtk4-menu-navigation*
+gtk4-print	print.txt	/*gtk4-print*
 gtk4-slow	gui_x11.txt	/*gtk4-slow*
 gu	change.txt	/*gu*
 gugu	change.txt	/*gugu*
@@ -9713,6 +9719,7 @@ page-up	intro.txt	/*page-up*
 page_down	intro.txt	/*page_down*
 page_up	intro.txt	/*page_up*
 pager	message.txt	/*pager*
+pango-printing	print.txt	/*pango-printing*
 papp.vim	syntax.txt	/*papp.vim*
 paragraph	motion.txt	/*paragraph*
 partial	builtin.txt	/*partial*
@@ -11009,6 +11016,7 @@ tempfile	change.txt	/*tempfile*
 template	autocmd.txt	/*template*
 tempname()	builtin.txt	/*tempname()*
 term++close	terminal.txt	/*term++close*
+term++noclose	terminal.txt	/*term++noclose*
 term++open	terminal.txt	/*term++open*
 term++shell	terminal.txt	/*term++shell*
 term-dependent-settings	term.txt	/*term-dependent-settings*

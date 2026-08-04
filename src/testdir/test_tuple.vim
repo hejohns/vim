@@ -778,6 +778,20 @@ func Test_tuple_for()
       LET sum += v2
     endfor
     call assert_equal(0, sum)
+
+    #" iterating over string items; the copied item must not be leaked
+    VAR res = ''
+    for v3 in ('a', 'bb', 'ccc')
+      LET res ..= v3
+    endfor
+    call assert_equal('abbccc', res)
+
+    #" iterating over container items must not leak a reference
+    VAR flat = []
+    for v4 in (['a'], ['b', 'c'])
+      LET flat += v4
+    endfor
+    call assert_equal(['a', 'b', 'c'], flat)
   END
   call v9.CheckSourceLegacyAndVim9Success(lines)
 
@@ -786,6 +800,18 @@ func Test_tuple_for()
     vim9script
     var count = 0
     for _ in (1, 2, 3)
+      count += 1
+    endfor
+    assert_equal(3, count)
+  END
+  call v9.CheckSourceSuccess(lines)
+
+  " ignoring the for loop assignment using '_'; string items must not be
+  " leaked
+  let lines =<< trim END
+    vim9script
+    var count = 0
+    for _ in ('a', 'bb', 'ccc')
       count += 1
     endfor
     assert_equal(3, count)
@@ -2461,6 +2487,14 @@ func Test_tuple_multi_assign_in_for_loop_from_import()
           res)
   END
   call v9.CheckSourceScriptSuccess(lines)
+endfunc
+
+" Memory allocation failure while collecting the rest of a tuple in an unpack
+func Test_tuple_unpack_memory_fail()
+  let t = ('1', '2', '3')
+  call test_alloc_fail(GetAllocId('tuple_append'), 0, 0)
+  call assert_fails('let [a; rest] = t', 'E342:')
+  unlet t
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

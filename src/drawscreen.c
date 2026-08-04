@@ -620,6 +620,7 @@ win_redr_status(win_T *wp, int ignore_pum UNUSED)
 	    if (width > 0)
 		screen_puts_len(showcmd_buf, width, row,
 				wp->w_wincol + this_ru_col - width - 1, attr);
+	    showcmd_update_clear_state();
 	}
     }
 
@@ -657,7 +658,9 @@ borrow_stl_vsep_hl(void)
     win_T   *left = NULL;
     win_T   *right = NULL;
 
-    if (!redrawing())
+    // In silent Ex mode the screen is not allocated, so LineOffset and
+    // ScreenAttrs are NULL; there is nothing to borrow.
+    if (!redrawing() || ScreenLines == NULL)
 	return;
 
     FOR_ALL_WINDOWS(left)
@@ -1655,6 +1658,13 @@ win_update(win_T *wp)
 	    clip_update_selection(&clip_plus);
 # endif
     }
+#endif
+
+#ifdef FEAT_SYN_HL
+    // 'cursorcolumn' is drawn with w_virtcol, make sure it is up to date.
+    // This may set w_redr_type, thus do it before using it below.
+    if (wp->w_p_cuc)
+	validate_virtcol_win(wp);
 #endif
 
     type = wp->w_redr_type;
@@ -3433,6 +3443,15 @@ redraw_buf_later(buf_T *buf, int type)
 	if (wp->w_buffer == buf)
 	    redraw_win_later(wp, type);
     }
+#ifdef FEAT_PROP_POPUP
+    // popup windows are not in the list of windows
+    FOR_ALL_POPUPWINS(wp)
+	if (wp->w_buffer == buf)
+	    redraw_win_later(wp, type);
+    FOR_ALL_POPUPWINS_IN_TAB(curtab, wp)
+	if (wp->w_buffer == buf)
+	    redraw_win_later(wp, type);
+#endif
 #if defined(FEAT_TERMINAL) && defined(FEAT_PROP_POPUP)
     // terminal in popup window is not in list of windows
     if (curwin->w_buffer == buf)
@@ -3475,6 +3494,17 @@ redraw_buf_and_status_later(buf_T *buf, int type)
 #endif
 
 /*
+ * mark the ruler for redraw when the last window has no status line and the
+ * ruler takes its place in the last screen line; showmode() draws it
+ */
+    static void
+ruler_redraw_lastwin(void)
+{
+    if (p_ru && lastwin->w_status_height == 0)
+	redraw_cmdline = TRUE;
+}
+
+/*
  * mark all status lines for redraw; used after first :cd
  */
     void
@@ -3488,6 +3518,7 @@ status_redraw_all(void)
 	    wp->w_redr_status = true;
 	    redraw_later(UPD_VALID);
 	}
+    ruler_redraw_lastwin();
 }
 
 /*
@@ -3504,6 +3535,8 @@ status_redraw_curbuf(void)
 	    wp->w_redr_status = true;
 	    redraw_later(UPD_VALID);
 	}
+    if (lastwin->w_buffer == curbuf)
+	ruler_redraw_lastwin();
 }
 
 /*

@@ -2815,8 +2815,8 @@ static const funcentry_T global_functions[] =
 			ret_list_number,    f_searchpos},
     {"server2client",	2, 2, FEARG_1,	    arg2_string,
 			ret_number_bool,    f_server2client},
-    {"serverlist",	0, 0, 0,	    NULL,
-			ret_string,	    f_serverlist},
+    {"serverlist",	0, 1, 0,	    arg1_dict_any,
+			ret_any,	    f_serverlist},
     {"setbufline",	3, 3, FEARG_3,	    arg3_setbufline,
 			ret_number_bool,    f_setbufline},
     {"setbufvar",	3, 3, FEARG_3,	    arg3_buffer_string_any,
@@ -5840,7 +5840,10 @@ f_getchangelist(typval_T *argvars, typval_T *rettv)
 	if ((d = dict_alloc()) == NULL)
 	    return;
 	if (list_append_dict(l, d) == FAIL)
+	{
+	    dict_unref(d);
 	    return;
+	}
 	dict_add_number(d, "lnum", (long)buf->b_changelist[i].lnum);
 	dict_add_number(d, "col", (long)buf->b_changelist[i].col);
 	dict_add_number(d, "coladd", (long)buf->b_changelist[i].coladd);
@@ -6058,7 +6061,10 @@ f_getjumplist(typval_T *argvars, typval_T *rettv)
 	if ((d = dict_alloc()) == NULL)
 	    return;
 	if (list_append_dict(l, d) == FAIL)
+	{
+	    dict_unref(d);
 	    return;
+	}
 	dict_add_number(d, "lnum", (long)wp->w_jumplist[i].fmark.mark.lnum);
 	dict_add_number(d, "col", (long)wp->w_jumplist[i].fmark.mark.col);
 	dict_add_number(d, "coladd", (long)wp->w_jumplist[i].fmark.mark.coladd);
@@ -6389,37 +6395,27 @@ add_regionpos_range(typval_T *rettv, pos_T p1, pos_T p2)
 
     if (list_append_list(rettv->vval.v_list, l1) == FAIL)
     {
-	vim_free(l1);
+	list_free(l1);
 	return;
     }
 
     l2 = list_alloc();
     if (l2 == NULL)
-    {
-	vim_free(l1);
 	return;
-    }
 
     if (list_append_list(l1, l2) == FAIL)
     {
-	vim_free(l1);
-	vim_free(l2);
+	list_free(l2);
 	return;
     }
 
     l3 = list_alloc();
     if (l3 == NULL)
-    {
-	vim_free(l1);
-	vim_free(l2);
 	return;
-    }
 
     if (list_append_list(l1, l3) == FAIL)
     {
-	vim_free(l1);
-	vim_free(l2);
-	vim_free(l3);
+	list_free(l3);
 	return;
     }
 
@@ -7561,6 +7557,13 @@ f_has(typval_T *argvars, typval_T *rettv)
 		},
 	{"postscript",
 #ifdef FEAT_POSTSCRIPT
+		1
+#else
+		0
+#endif
+		},
+	{"pango",
+#ifdef FEAT_PRINT_PANGO
 		1
 #else
 		0
@@ -9498,7 +9501,10 @@ get_matches_in_str(
 	if (d == NULL)
 	    return FAIL;
 	if (list_append_dict(mlist, d) == FAIL)
+	{
+	    dict_unref(d);
 	    return FAIL;
+	}
 
 	if (dict_add_number(d, matchbuf ? "lnum" : "idx", idx) == FAIL)
 	    return FAIL;
@@ -9518,7 +9524,10 @@ get_matches_in_str(
 		return FAIL;
 
 	    if (dict_add_list(d, "submatches", sml) == FAIL)
+	    {
+		list_unref(sml);
 		return FAIL;
+	    }
 
 	    // return a list with the submatches
 	    for (int i = 1; i < NSUBEXP; ++i)
@@ -10557,7 +10566,8 @@ f_getreginfo(typval_T *argvars, typval_T *rettv)
     list = (list_T *)get_reg_contents(regname, GREG_EXPR_SRC | GREG_LIST);
     if (list == NULL)
 	return;
-    (void)dict_add_list(dict, "regcontents", list);
+    if (dict_add_list(dict, "regcontents", list) == FAIL)
+	list_unref(list);
 
     switch (get_reg_type(regname, &reglen))
     {

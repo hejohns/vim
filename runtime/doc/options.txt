@@ -1,4 +1,4 @@
-*options.txt*	For Vim version 9.2.  Last change: 2026 Jun 17
+*options.txt*	For Vim version 9.2.  Last change: 2026 Aug 04
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -2302,8 +2302,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 		    See also |preinserted()|.
 
 	   menu	    Use a popup menu to show the possible completions.  The
-		    menu is only shown when there is more than one match and
-		    sufficient colors are available.  |ins-completion-menu|
+		    menu is only shown when there is more than one match.
+		    |ins-completion-menu|
 
 	   menuone  Use the popup menu also when there is only one match.
 		    Useful when there is additional information about the
@@ -4948,6 +4948,8 @@ A jump table for the options with a short description can be found at |Q_op|.
 	restored if possible |X11|.  See |X11-icon| for changing the icon on
 	X11.
 	For MS-Windows the icon can be changed, see |windows-icon|.
+	NOTE: GNU screen is not consistent in handling icon-title and title
+	escape sequences between versions.   See 'title'.
 
 						*'iconstring'*
 'iconstring'		string	(default "")
@@ -5678,6 +5680,12 @@ A jump table for the options with a short description can be found at |Q_op|.
 		0: never
 		1: only if there are at least two windows
 		2: always
+
+	Here "last window" means the last window in a column, i.e. the bottom-
+	most one, just above the command line.  A window with another window
+	below it always has a status line, since it also visually separates
+	those.
+
 	The screen looks nicer with a status line if you have several
 	windows, but it takes another screen line. |status-line|
 
@@ -6458,7 +6466,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 	  x	<number>	any X11 pointer number (see X11/cursorfont.h)
 
 	The "avail" column contains a 'w' if the shape is available for Win32,
-	x for X11 (including GTK+ 2), g for GTK+ 3.
+	x for X11 (including GTK+ 2), g for GTK+ 3 and GTK 4.
 	Any modes not specified or shapes not available use the normal mouse
 	pointer.
 
@@ -6892,7 +6900,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 'printexpr' 'pexpr'	string	(default: see below)
 			global
 			{only available when compiled with the |+printer|
-			and |+postscript| features}
+			and |+postscript| or |+pango| features}
 	Expression used to print the PostScript produced with |:hardcopy|.
 	See |pexpr-option|.
 	This option cannot be set from a |modeline| or in the |sandbox|, for
@@ -7333,7 +7341,7 @@ A jump table for the options with a short description can be found at |Q_op|.
 		    emoji might be rendered beyond the bounding box of drawing
 		    cell.
 
-	Other render types are currently not supported.
+	Other render types are currently not supported.  See also 'guiligatures'.
 
 						*'report'*
 'report'		number	(default 2)
@@ -9635,6 +9643,9 @@ A jump table for the options with a short description can be found at |Q_op|.
 	then the WINDOWID environment variable should be inherited and the
 	title of the window should change back to what it should be after
 	exiting Vim.
+	NOTE: GNU screen is not consistent in handling icon-title and title
+	escape sequences between versions. In particular, screen 5 may swap
+	title and icon-title.
 
 								*'titlelen'*
 'titlelen'		number	(default 85)

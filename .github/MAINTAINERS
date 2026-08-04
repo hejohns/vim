@@ -9,7 +9,6 @@
 # So if a pull request only touches javascript files, only these owners
 # will be requested to review.
 
-nsis/lang/russian.nsi					@RestorerZ
 runtime/autoload/beancount.vim				@nathangrigg
 runtime/autoload/beancountcomplete.vim			@nathangrigg
 runtime/autoload/context.vim				@lifepillar
@@ -135,6 +134,11 @@ runtime/doc/vimtutor-ru.1				@RestorerZ
 runtime/doc/vimtutor-ru.UTF-8.1				@RestorerZ
 runtime/doc/xxd-ru.1					@RestorerZ
 runtime/doc/xxd-ru.UTF-8.1				@RestorerZ
+runtime/doc/evim-zh_CN.UTF-8.1				@mao-yining
+runtime/doc/vim-zh_CN.UTF-8.1				@mao-yining
+runtime/doc/vimdiff-zh_CN.UTF-8.1			@mao-yining
+runtime/doc/vimtutor-zh_CN.UTF-8.1			@mao-yining
+runtime/doc/xxd-zh_CN.UTF-8.1				@mao-yining
 runtime/ftplugin/abaqus.vim				@costerwi
 runtime/ftplugin/abnf.vim				@A4-Tacks
 runtime/ftplugin/algol68.vim				@dkearns
@@ -202,6 +206,7 @@ runtime/ftplugin/gitcommit.vim				@tpope
 runtime/ftplugin/gitconfig.vim				@tpope
 runtime/ftplugin/gitignore.vim				@ObserverOfTime
 runtime/ftplugin/gitrebase.vim				@tpope
+runtime/ftplugin/gitrevlist.vim				@fionn
 runtime/ftplugin/gitsendemail.vim			@tpope
 runtime/ftplugin/gleam.vim				@kirillmorozov
 runtime/ftplugin/go.vim					@dbarnett
@@ -231,6 +236,7 @@ runtime/ftplugin/java.vim				@zzzyxwvut
 runtime/ftplugin/javacc.vim				@ribru17
 runtime/ftplugin/javascript.vim				@dkearns
 runtime/ftplugin/javascriptreact.vim			@dkearns
+runtime/ftplugin/jinja.vim				@HiPhish
 runtime/ftplugin/jjdescription.vim			@gpanders
 runtime/ftplugin/jq.vim					@vito-c
 runtime/ftplugin/json.vim				@dbarnett
@@ -255,6 +261,7 @@ runtime/ftplugin/liquid.vim				@tpope
 runtime/ftplugin/logtalk.dict				@pmoura
 runtime/ftplugin/logtalk.vim				@pmoura
 runtime/ftplugin/lua.vim				@dkearns
+runtime/ftplugin/luau.vim				@lopi-py
 runtime/ftplugin/lynx.vim				@dkearns
 runtime/ftplugin/m17ndb.vim				@dseomn
 runtime/ftplugin/m3build.vim				@dkearns
@@ -350,6 +357,7 @@ runtime/ftplugin/tt2html.vim				@petdance
 runtime/ftplugin/twig.vim				@ribru17
 runtime/ftplugin/typescript.vim				@dkearns
 runtime/ftplugin/typescriptreact.vim			@dkearns
+runtime/ftplugin/typst.vim				@habamax
 runtime/ftplugin/uc.vim					@ribru17
 runtime/ftplugin/unison.vim				@chuwy
 runtime/ftplugin/v.vim					@ribru17
@@ -370,6 +378,7 @@ runtime/indent/basic.vim				@dkearns
 runtime/indent/beancount.vim				@nathangrigg
 runtime/indent/bpftrace.vim				@sgruszka
 runtime/indent/bst.vim					@tpope
+runtime/indent/cabal.vim				@mateoxh
 runtime/indent/cdl.vim					@dkearns
 runtime/indent/chatito.vim				@ObserverOfTime
 runtime/indent/clojure.vim				@axvr
@@ -420,6 +429,7 @@ runtime/indent/less.vim					@genoma
 runtime/indent/liquid.vim				@tpope
 runtime/indent/logtalk.vim				@pmoura
 runtime/indent/lua.vim					@marcuscf
+runtime/indent/luau.vim					@lopi-py
 runtime/indent/m17ndb.vim				@dseomn
 runtime/indent/make.vim					@dkearns
 runtime/indent/meson.vim				@Liambeguin
@@ -534,6 +544,7 @@ runtime/syntax/dot.vim					@mmottl
 runtime/syntax/doxygen.vim				@frogonwheels
 runtime/syntax/dtd.vim					@chrisbra
 runtime/syntax/dts.vim					@zonque
+runtime/syntax/ed.vim					@dkearns
 runtime/syntax/editorconfig.vim				@gpanders
 runtime/syntax/eiffel.vim				@jocelyn
 runtime/syntax/erlang.vim				@hcs42
@@ -576,6 +587,7 @@ runtime/syntax/hcl.vim					@gpanders
 runtime/syntax/help.vim					@dkearns
 runtime/syntax/help_ru.vim				@RestorerZ
 runtime/syntax/hgcommit.vim				@k-takata
+runtime/syntax/hip.vim					@Young-TW
 runtime/syntax/hitest.vim				@lacygoill
 runtime/syntax/hog.vim					@wtfbbqhax
 runtime/syntax/hollywood.vim				@sodero
@@ -609,6 +621,7 @@ runtime/syntax/liquid.vim				@tpope
 runtime/syntax/log.vim					@mao-yining
 runtime/syntax/logtalk.vim				@pmoura
 runtime/syntax/lua.vim					@marcuscf
+runtime/syntax/luau.vim					@lopi-py
 runtime/syntax/lynx.vim					@dkearns
 runtime/syntax/lyrics.vim				@ObserverOfTime
 runtime/syntax/m17ndb.vim				@dseomn
@@ -617,6 +630,7 @@ runtime/syntax/m3quake.vim				@dkearns
 runtime/syntax/mailcap.vim				@dkearns
 runtime/syntax/mallard.vim				@jhradilek
 runtime/syntax/markdown.vim				@tpope
+runtime/syntax/marko.vim				@briancarbone
 runtime/syntax/mason.vim				@petdance
 runtime/syntax/mbsync.vim				@fymyte
 runtime/syntax/mediawiki.vim				@avidseeker
@@ -682,6 +696,7 @@ runtime/syntax/salt.vim					@gpanders
 runtime/syntax/sass.vim					@tpope
 runtime/syntax/scala.vim				@derekwyatt
 runtime/syntax/scheme.vim				@evhan
+runtime/syntax/screen.vim				@zzzyxwvut
 runtime/syntax/scss.vim					@tpope
 runtime/syntax/sed.vim					@dkearns
 runtime/syntax/sgf.vim					@lykahb
@@ -696,8 +711,12 @@ runtime/syntax/sqloracle.vim				@chrisbra
 runtime/syntax/squirrel.vim				@zenmatic
 runtime/syntax/srt.vim					@ObserverOfTime
 runtime/syntax/ssa.vim					@ObserverOfTime
+runtime/syntax/sshallowedsigners.vim			@fionn
+runtime/syntax/sshauthorizedkeys.vim			@fionn
 runtime/syntax/sshconfig.vim				@Jakuje
 runtime/syntax/sshdconfig.vim				@Jakuje
+runtime/syntax/sshpublickey.vim				@fionn
+runtime/syntax/sshknownhosts.vim			@fionn
 runtime/syntax/sudoers.vim				@e-kwsm
 runtime/syntax/svn.vim					@hdima
 runtime/syntax/swayconfig.vim				@jamespeapen
@@ -719,7 +738,7 @@ runtime/syntax/tt2html.vim				@petdance
 runtime/syntax/tt2js.vim				@petdance
 runtime/syntax/typescript.vim				@HerringtonDarkholme @rhysd
 runtime/syntax/typescriptreact.vim			@HerringtonDarkholme @rhysd
-runtime/syntax/typst.vim				@gpanders
+runtime/syntax/typst.vim				@habamax
 runtime/syntax/shared/typescriptcommon.vim		@HerringtonDarkholme @rhysd
 runtime/syntax/unison.vim				@chuwy
 runtime/syntax/vdf.vim					@ObserverOfTime
@@ -731,8 +750,9 @@ runtime/syntax/wks.vim					@anakin4747
 runtime/syntax/xbl.vim					@dkearns
 runtime/syntax/xcompose.vim				@ObserverOfTime
 runtime/syntax/xml.vim					@chrisbra
+runtime/syntax/xsd.vim					@chrisbra
 runtime/syntax/xs.vim					@petdance
-runtime/syntax/xslt.vim					@Boobies
+runtime/syntax/xslt.vim					@chrisbra
 runtime/syntax/zserio.vim				@dpelle
 runtime/syntax/zsh.vim					@chrisbra
 runtime/tools/preproc_indent.vim			@h-east

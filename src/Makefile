@@ -1247,6 +1247,7 @@ GTK4_SRC	= gui.c gui_gtk4.c gui_gtk4_f.c \
 			gui_gtk4_da.c \
 			gui_beval.o \
 			gui_gtk4_tb.c \
+			gui_gtk4_menu.c \
 			$(GRESOURCE_SRC)
 GTK4_OBJ	= objects/gui.o objects/gui_gtk4.o \
 			objects/gui_gtk4_f.o \
@@ -1254,6 +1255,7 @@ GTK4_OBJ	= objects/gui.o objects/gui_gtk4.o \
 			objects/gui_gtk4_da.o \
 			objects/gui_beval.o \
 			objects/gui_gtk4_tb.o \
+			objects/gui_gtk4_menu.o \
 			$(GRESOURCE_OBJ)
 GTK4_DEFS	= -DFEAT_GUI_GTK $(NARROW_PROTO)
 GTK4_IPATH	= $(GUI_INC_LOC)
@@ -1323,7 +1325,7 @@ HAIKUGUI_TESTTARGET = gui
 HAIKUGUI_BUNDLE =
 
 # All GUI files
-ALL_GUI_SRC  = gui.c gui_gtk.c gui_gtk_f.c gui_gtk4.c gui_gtk4_f.c gui_gtk4_cb.c gui_gtk4_da.c gui_gtk4_tb.c gui_motif.c gui_xmdlg.c gui_xmebw.c gui_gtk_x11.c gui_x11.c gui_haiku.cc
+ALL_GUI_SRC  = gui.c gui_gtk.c gui_gtk_f.c gui_gtk4.c gui_gtk4_f.c gui_gtk4_cb.c gui_gtk4_da.c gui_gtk4_tb.c gui_gtk4_menu.c gui_motif.c gui_xmdlg.c gui_xmebw.c gui_gtk_x11.c gui_x11.c gui_haiku.cc
 ALL_GUI_PRO  = proto/gui.pro proto/gui_gtk.pro proto/gui_gtk4.pro proto/gui_motif.pro proto/gui_xmdlg.pro proto/gui_gtk_x11.pro proto/gui_x11.pro proto/gui_w32.pro proto/gui_photon.pro
 
 # }}}
@@ -1418,6 +1420,8 @@ ALL_LIBS = \
 	   $(X_PRE_LIBS) \
 	   $(X_LIBS) \
 	   $(WAYLAND_LIBS) \
+	   $(CAIRO_LIBS) \
+	   $(PANGO_LIBS) \
 	   $(X_EXTRA_LIBS) \
 	   $(MZSCHEME_LIBS) \
 	   $(LIBS) \
@@ -1544,6 +1548,8 @@ BASIC_SRC = \
 	gc.c \
 	gui_xim.c \
 	hardcopy.c \
+	hardcopy_pango.c \
+	hardcopy_postscript.c \
 	hashtab.c \
 	help.c \
 	highlight.c \
@@ -1730,6 +1736,8 @@ OBJ_COMMON = \
 	objects/gc.o \
 	objects/gui_xim.o \
 	objects/hardcopy.o \
+	objects/hardcopy_pango.o \
+	objects/hardcopy_postscript.o \
 	objects/hashtab.o \
 	objects/help.o \
 	objects/highlight.o \
@@ -2202,12 +2210,12 @@ proto/gui_gtk_gresources.pro: auto/gui_gtk_gresources.c
 	fi
 
 notags:
-	-rm -f tags
+	$(MAKE) -f Make_tags.mak notags
 
-# Note: tags is made for the currently configured version.
+# Configure sets portable TAGPRG, else modern ctags is used.
 # You can ignore error messages for missing files.
 tags TAGS: notags
-	$(TAGPRG) $(TAGS_FILES)
+	$(MAKE) -f Make_tags.mak tags
 
 # Build the cscope database.
 # This may search more files than necessary.
@@ -3290,7 +3298,7 @@ objects/clientserver.o: clientserver.c
 	$(CCC) -o $@ clientserver.c
 
 objects/clipboard.o: clipboard.c $(WAYLAND_SRC)
-	$(CCC) -o $@ clipboard.c
+	$(CCC) $(WAYLAND_CFLAGS) $(WAYLAND_CPPFLAGS) -o $@ clipboard.c
 
 objects/cmdexpand.o: cmdexpand.c
 	$(CCC) -o $@ cmdexpand.c
@@ -3382,6 +3390,12 @@ objects/gc.o: gc.c
 objects/hardcopy.o: hardcopy.c
 	$(CCC) -o $@ hardcopy.c
 
+objects/hardcopy_pango.o: hardcopy_pango.c
+	$(CCC) $(CAIRO_CFLAGS) $(CAIRO_CPPFLAGS) $(PANGO_CFLAGS) $(PANGO_CPPFLAGS) -o $@ hardcopy_pango.c
+
+objects/hardcopy_postscript.o: hardcopy_postscript.c
+	$(CCC) -o $@ hardcopy_postscript.c
+
 objects/hashtab.o: hashtab.c
 	$(CCC) -o $@ hashtab.c
 
@@ -3423,6 +3437,9 @@ objects/gui_gtk4_da.o: gui_gtk4_da.c
 
 objects/gui_gtk4_tb.o: gui_gtk4_tb.c
 	$(CCC) -o $@ gui_gtk4_tb.c
+
+objects/gui_gtk4_menu.o: gui_gtk4_menu.c
+	$(CCC) -o $@ gui_gtk4_menu.c
 
 
 objects/gui_haiku.o: gui_haiku.cc
@@ -4095,7 +4112,17 @@ objects/hardcopy.o: auto/osdef.h hardcopy.c vim.h protodef.h auto/config.h featu
  ascii.h keymap.h termdefs.h macros.h option.h beval.h \
  structs.h regexp.h gui.h libvterm/include/vterm.h \
  libvterm/include/vterm_keycodes.h alloc.h ex_cmds.h spell.h proto.h \
- globals.h errors.h version.h
+ globals.h errors.h version.h hardcopy.h hardcopy_pango.h hardcopy_postscript.h
+objects/hardcopy_pango.o: auto/osdef.h hardcopy_pango.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ ascii.h keymap.h termdefs.h macros.h option.h beval.h \
+ structs.h regexp.h gui.h libvterm/include/vterm.h \
+ libvterm/include/vterm_keycodes.h alloc.h ex_cmds.h spell.h proto.h \
+ globals.h errors.h hardcopy.h hardcopy_pango.h
+objects/hardcopy_postscript.o: auto/osdef.h hardcopy_postscript.c vim.h protodef.h auto/config.h feature.h os_unix.h \
+ ascii.h keymap.h termdefs.h macros.h option.h beval.h \
+ structs.h regexp.h gui.h libvterm/include/vterm.h \
+ libvterm/include/vterm_keycodes.h alloc.h ex_cmds.h spell.h proto.h \
+ globals.h errors.h version.h hardcopy.h hardcopy_postscript.h
 objects/hashtab.o: auto/osdef.h hashtab.c vim.h protodef.h auto/config.h feature.h os_unix.h \
  ascii.h keymap.h termdefs.h macros.h option.h beval.h \
  structs.h regexp.h gui.h libvterm/include/vterm.h \
@@ -4521,7 +4548,7 @@ objects/gui_gtk4.o: auto/osdef.h gui_gtk4.c vim.h protodef.h auto/config.h featu
  structs.h regexp.h gui.h libvterm/include/vterm.h \
  libvterm/include/vterm_keycodes.h alloc.h ex_cmds.h spell.h proto.h \
  globals.h errors.h gui_gtk4_f.h auto/gui_gtk_gresources.h \
- gui_gtk4_cb.h gui_gtk4_da.h gui_gtk4_tb.h
+ gui_gtk4_cb.h gui_gtk4_da.h gui_gtk4_tb.h gui_gtk4_menu.h
 objects/gui_gtk4_f.o: auto/osdef.h gui_gtk4_f.c vim.h protodef.h auto/config.h feature.h \
  os_unix.h ascii.h keymap.h termdefs.h macros.h option.h \
  beval.h structs.h regexp.h gui.h \
@@ -4542,6 +4569,11 @@ objects/gui_gtk4_tb.o: auto/osdef.h gui_gtk4_tb.c vim.h protodef.h auto/config.h
  beval.h structs.h regexp.h gui.h \
  libvterm/include/vterm.h libvterm/include/vterm_keycodes.h alloc.h \
  ex_cmds.h spell.h proto.h globals.h errors.h gui_gtk4_tb.h
+objects/gui_gtk4_menu.o: auto/osdef.h gui_gtk4_menu.c vim.h protodef.h auto/config.h feature.h \
+ os_unix.h ascii.h keymap.h termdefs.h macros.h option.h \
+ beval.h structs.h regexp.h gui.h \
+ libvterm/include/vterm.h libvterm/include/vterm_keycodes.h alloc.h \
+ ex_cmds.h spell.h proto.h globals.h errors.h gui_gtk4_menu.h
 objects/gui_gtk_f.o: auto/osdef.h gui_gtk_f.c vim.h protodef.h auto/config.h feature.h \
  os_unix.h ascii.h keymap.h termdefs.h macros.h option.h \
  beval.h structs.h regexp.h gui.h \

@@ -1,4 +1,4 @@
-*version9.txt*	For Vim version 9.2.  Last change: 2026 Jun 13
+*version9.txt*	For Vim version 9.2.  Last change: 2026 Aug 02
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -52590,6 +52590,8 @@ GUI ~
 - Added support for the GTK 4 GUI (via patch 9.2.0501).  Enable with
   `--enable-gui=gtk4` configure switch at build time.
 - Add support for fullscreen mode in the GTK UI |'go-s'|.
+- Enable native printing diaglog for the GTK4 UI using pango library, see
+  |pango-printing|.
 
 Popups ~
 ------
@@ -52657,12 +52659,19 @@ Other ~
   not drop leading spaces |stl-%0{|.
 - Generated Session and View files are written in Vim9 script, see |:mksession|,
   |:mkview| and |:mkvimrc|
+- The "term_finish" option of term_start() supports a "noclose" value.
 
 Platform specific ~
 -----------------
 - support OpenType font features in 'guifont' for DirectWrite (Win32)
 - Include strptime() fallback for MS-Windows
-- Hardware-accelerated rendering for the GTK4 GUI via |gtk4-hwaccel|.
+- The NSIS installer has been reworked (Win32):
+  - Support per-user and per-machine install.
+  - Change the install directory structure.
+  - Replace the batch files with the Vim launchers.
+  - Support adding the Vim directory to PATH.
+  - Support selecting install components from the command line options.
+  - Move the source code to the vim/vim-win32-installer repository.
 
 xxd ~
 ---
@@ -52687,6 +52696,10 @@ Changed ~
 - Rewrite the clientserver socketserver backend to use channels and JSON.
 - During |complete()|-triggered completion, CTRL-N and CTRL-P are now subject
   to insert-mode mappings.
+- It is possible to clear the alternate file register |quote#|.
+- |serverlist()| can return a list of all available server names.
+- Improve visual appearance when the terminal does not support colors.
+- Improve diff highlighting for terminals with 256 or less colors.
 
 
 							*added-9.3*

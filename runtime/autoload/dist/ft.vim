@@ -3,7 +3,7 @@ vim9script
 # Vim functions for file type detection
 #
 # Maintainer:		The Vim Project <https://github.com/vim/vim>
-# Last Change:		2026 Jun 14
+# Last Change:		2026 Jul 30
 # Former Maintainer:	Bram Moolenaar <Bram@vim.org>
 
 # These functions are moved here from runtime/filetype.vim to make startup
@@ -1860,6 +1860,11 @@ const ft_from_ext = {
   "cairo": "cairo",
   # Cap'n Proto
   "capnp": "capnp",
+  # Dockerfile
+  "containerfile": "dockerfile",
+  "Containerfile": "dockerfile",
+  "dockerfile": "dockerfile",
+  "Dockerfile": "dockerfile",
   # Common Package Specification
   "cps": "json",
   # C#
@@ -1964,6 +1969,8 @@ const ft_from_ext = {
   # CUDA Compute Unified Device Architecture
   "cu": "cuda",
   "cuh": "cuda",
+  # HIP Heterogeneous-compute Interface for Portability
+  "hip": "hip",
   # Cue
   "cue": "cue",
   # DAX
@@ -2046,6 +2053,8 @@ const ft_from_ext = {
   "overlay": "dts",
   # Embedix Component Description
   "ecd": "ecd",
+  # ed(1)
+  "ed": "ed",
   # ERicsson LANGuage; Yaws is erlang too
   "erl": "erlang",
   "hrl": "erlang",
@@ -2409,6 +2418,8 @@ const ft_from_ext = {
   "page": "mallard",
   # Manpage
   "man": "man",
+  # Marko
+  "marko": "marko",
   # Maple V
   "mv": "maple",
   "mpl": "maple",
@@ -3159,6 +3170,8 @@ const ft_from_ext = {
   "tiltfile": "tiltfile",
   # Ghostty
   "ghostty": "ghostty",
+  # Xilinx Design Constraint file
+  "xdc": "tcl",
 }
 # Key: file name (the final path component, excluding the drive and root)
 # Value: filetype
@@ -3264,6 +3277,8 @@ const ft_from_name = {
   "TAG_EDITMSG": "gitcommit",
   "NOTES_EDITMSG": "gitcommit",
   "EDIT_DESCRIPTION": "gitcommit",
+  # Git revision list
+  ".git-blame-ignore-revs": "gitrevlist",
   # gnash(1) configuration files
   "gnashrc": "gnash",
   ".gnashrc": "gnash",
@@ -3306,6 +3321,8 @@ const ft_from_name = {
   ".swcrc": "json",
   "composer.lock": "json",
   "symfony.lock": "json",
+  # osquery configuration
+  "osquery.conf": "jsonc",
   # Kconfig
   "Kconfig": "kconfig",
   "Kconfig.debug": "kconfig",
@@ -3338,6 +3355,7 @@ const ft_from_name = {
   "meson.options": "meson",
   "meson_options.txt": "meson",
   # msmtp
+  "msmtprc": "msmtp",
   ".msmtprc": "msmtp",
   # Mrxvtrc
   "mrxvtrc": "mrxvtrc",

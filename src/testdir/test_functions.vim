@@ -1,6 +1,7 @@
 " Tests for various functions.
 
 source util/screendump.vim
+source util/view_util.vim
 import './util/vim9.vim' as v9
 
 " Must be done first, since the alternate buffer must be unset.
@@ -210,6 +211,56 @@ func Test_strwidth()
   set ambiwidth&
 endfunc
 
+func Test_strtrans()
+  " The default of 'isprint' is platform-dependent: 0x7f and 0x9f are
+  " printable on Win32 and VMS.  Set it so the expectations below hold
+  " everywhere.
+  let save_isprint = &isprint
+  set isprint=@,161-255
+
+  " printable ASCII is unchanged
+  call assert_equal('', strtrans(''))
+  call assert_equal('abc', strtrans('abc'))
+
+  " control characters are displayed as ^X
+  call assert_equal('^I', strtrans("\t"))
+  call assert_equal('a^Mb^[c', strtrans("a\rb\ec"))
+  call assert_equal('^A^_^?', strtrans("\x01\x1f\x7f"))
+
+  " printable multibyte characters are unchanged, including composing
+  " characters and characters above 0xffff
+  call assert_equal('héllo 你好', strtrans('héllo 你好'))
+  let s = 'e' .. nr2char(0x301) .. 'x'
+  call assert_equal(s, strtrans(s))
+  call assert_equal(nr2char(0x1d11e), strtrans(nr2char(0x1d11e)))
+
+  " unprintable multibyte characters are displayed in <xx> hex form
+  call assert_equal('<9f>', strtrans(nr2char(0x9f)))
+  call assert_equal('<200b>', strtrans(nr2char(0x200b)))
+  call assert_equal('<feff>', strtrans(nr2char(0xfeff)))
+
+  " illegal bytes are displayed in <xx> hex form
+  call assert_equal('A<ff>B', strtrans("A\xffB"))
+
+  " a long string mixing all kinds of characters
+  call assert_equal(repeat('a^Bé<9f>', 100),
+        \ strtrans(repeat("a\x02é" .. nr2char(0x9f), 100)))
+
+  " the non-multi-byte code path
+  set encoding=latin1
+  set isprint=@,161-255
+  call assert_equal('a^Mb^[c', strtrans("a\rb\ec"))
+  call assert_equal('^A^_^?', strtrans("\x01\x1f\x7f"))
+  " an unprintable byte above 0x7f uses the meta notation
+  call assert_equal('| ', strtrans("\xa0"))
+  " a printable high byte is unchanged
+  call assert_equal("\xe9", strtrans("\xe9"))
+  call assert_equal("x^B\xe9| y", strtrans("x\x02\xe9\xa0y"))
+  set encoding=utf-8
+
+  let &isprint = save_isprint
+endfunc
+
 func Test_str2nr()
   call assert_equal(0, str2nr(''))
   call assert_equal(1, str2nr('1'))
@@ -330,7 +381,7 @@ func Test_strptime()
 
   " Force DST and check that it's considered.
   " MS-Windows CRT tzset() does not parse POSIX TZ strings with DST rules.
-  if !has('win32')
+  if !has('win32') && !has('sun')
     let $TZ = 'WINTER0SUMMER,J1,J365'
     call assert_equal(1484653763 - 3600, strptime('%Y-%m-%d %T', '2017-01-17 11:49:23'))
   endif
@@ -3702,6 +3753,10 @@ func Test_keytrans()
   call assert_equal('<M-x>', "\<*M-x>"->keytrans())
   call assert_equal('<C-I>', "\<*C-I>"->keytrans())
   call assert_equal('<S-3>', "\<*S-3>"->keytrans())
+  call assert_equal('<Bar>', '|'->keytrans())
+  call assert_equal('<M-Bar>', "\<*M-|>"->keytrans())
+  call assert_equal('<Bslash>', '\'->keytrans())
+  call assert_equal('<M-Bslash>', "\<*M-\>"->keytrans())
   call assert_equal('π', 'π'->keytrans())
   call assert_equal('<M-π>', "\<M-π>"->keytrans())
   call assert_equal('ě', 'ě'->keytrans())
@@ -4699,6 +4754,60 @@ func Test_vim9_def_defer_fc_sandbox()
 
   call assert_fails('call g:BadDefer()', 'E48:')
   delfunction g:BadDefer
+endfunc
+
+" Test wincol() counts in screen cells from left side of the window
+func Test_wincol()
+  enew!
+  set ff=unix mouse=a
+
+  let win_width = 30
+  call NewWindow(20, win_width)
+
+  call setline(1, "the quick brown fox jump")
+
+  norm! 0
+  call assert_equal([1, 1], [winline(), wincol()])
+
+  call test_setmouse(1, 10)
+  call feedkeys("\<LeftMouse>\<Ignore>", "xt")
+  call assert_equal([1, 10], [winline(), wincol()])
+
+  if has('rightleft')
+    norm! 0
+    call assert_equal([1, 1], [winline(), wincol()])
+
+    set rightleft
+    " cursor is still at column 1, but in screen cells it is at the distance of window width:
+    call assert_equal([1, win_width], [winline(), wincol()])
+
+    " test_setmouse() works in screen coordinates, which is not affected by 'rightleft':
+    call test_setmouse(1, 10)
+    call feedkeys("\<LeftMouse>\<Ignore>", "xt")
+    call assert_equal([1, 10], [winline(), wincol()])
+    set rightleft&
+  endif
+
+  " With 'rightleft' the cursor is on the leftmost cell of a double-wide
+  " character, so wincol() is one less than where the character starts.
+  call setline(1, "あいうえお")
+
+  norm! 0
+  call assert_equal([1, 1], [winline(), wincol()])
+  norm! l
+  call assert_equal([1, 3], [winline(), wincol()])
+
+  if has('rightleft')
+    set rightleft
+    norm! 0
+    call assert_equal([1, win_width - 1], [winline(), wincol()])
+    norm! l
+    call assert_equal([1, win_width - 3], [winline(), wincol()])
+    set rightleft&
+  endif
+
+  set ff& mouse&
+  bw!
 endfunc
 
 " vim: shiftwidth=2 sts=2 expandtab

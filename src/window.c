@@ -1232,9 +1232,8 @@ win_split_ins(
 
 	    win_setheight_win(oldwin->w_height + new_size
 		    + statusline_height(oldwin), oldwin);
+	    // w_height now excludes the status line
 	    oldwin_height = oldwin->w_height;
-	    if (need_status)
-		oldwin_height -= statusline_height(oldwin);
 	}
 
 	// Only make all windows the same height if one of them (except oldwin)
@@ -7288,6 +7287,9 @@ win_fix_scroll(int resize)
 		int diff = (wp->w_winrow - wp->w_prev_winrow)
 					  + (wp->w_height - wp->w_prev_height);
 		pos_T cursor = wp->w_cursor;
+		linenr_T topline = wp->w_topline;
+		colnr_T skipcol = wp->w_skipcol;
+
 		wp->w_cursor.lnum = wp->w_botline - 1;
 
 		//  Add difference in height and row to botline.
@@ -7302,6 +7304,9 @@ win_fix_scroll(int resize)
 		scroll_to_fraction(wp, wp->w_prev_height);
 
 		wp->w_cursor = cursor;
+		// Keeping the same screen lines includes the skipped columns.
+		if (wp->w_topline == topline)
+		    wp->w_skipcol = skipcol;
 		wp->w_valid &= ~VALID_WCOL;
 	    }
 	    else if (wp == curwin)
@@ -7414,7 +7419,10 @@ win_new_height(win_T *wp, int height)
     // values might be invalid.
     if (!exiting && *p_spk == 'c')
     {
-	wp->w_skipcol = 0;
+	// With 'smoothscroll' w_skipcol is the scroll position, keep it.
+	// Otherwise it only keeps the cursor visible and is computed again.
+	if (!wp->w_p_sms)
+	    wp->w_skipcol = 0;
 	scroll_to_fraction(wp, prev_height);
     }
 }
@@ -7466,18 +7474,22 @@ scroll_to_fraction(win_T *wp, int prev_height)
 	     * Make cursor line the first line in the window.  If not enough
 	     * room use w_skipcol;
 	     */
+	    int		want_row = wp->w_wrow;	// where the cursor should be
+
 	    wp->w_wrow = line_size;
 	    if (wp->w_wrow >= wp->w_height
 				       && (wp->w_width - win_col_off(wp)) > 0)
 	    {
-		wp->w_skipcol += wp->w_width - win_col_off(wp);
+		// Skip columns to get the cursor in the wanted row.
+		colnr_T	skipcol = wp->w_width - win_col_off(wp);
+
 		--wp->w_wrow;
-		while (wp->w_wrow >= wp->w_height)
+		while (wp->w_wrow > want_row)
 		{
-		    wp->w_skipcol += wp->w_width - win_col_off(wp)
-							   + win_col_off2(wp);
+		    skipcol += wp->w_width - win_col_off(wp) + win_col_off2(wp);
 		    --wp->w_wrow;
 		}
+		wp->w_skipcol = skipcol;
 	    }
 	}
 	else if (sline > 0)
@@ -7830,10 +7842,9 @@ frame_find_global_stlh_rec(frame_T *frp, int h)
 	win_T  *wp = frp->fr_win;
 
 	// Only consider windows with a status line that use global stlo.
-	// Exclude windows at minimum height (w_height <= p_wmh): they can
-	// only afford 1 status line row anyway, and should not constrain
-	// the global stlh for larger windows (e.g. after CTRL-W__).
-	if (wp->w_height > p_wmh && wp->w_status_height > 0
+	// Every such window constrains the global height (best effort): the
+	// result is the largest height that still fits every window.
+	if (wp->w_height > 0 && wp->w_status_height > 0
 		&& *wp->w_p_stlo == NUL)
 	{
 	    int win_free_height = frp->fr_height - WINBAR_HEIGHT(wp);

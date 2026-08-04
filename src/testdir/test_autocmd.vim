@@ -3208,7 +3208,40 @@ func Test_autocmd_once()
   close
 
   call assert_fails('au WinNew * ++once ++once echo bad', 'E983:')
+  call assert_false(exists('#WinNew'))
 endfunc
+
+func Test_autocmd_dup_arg()
+  " Duplicate ++once / ++nested, or the legacy "nested" used twice, must
+  " error out *and* not create the autocommand.  Using an environment
+  " variable in the pattern also exercises the error-exit path that frees
+  " the expanded pattern (checked by the address/leak sanitizers).
+  augroup XdupTest
+    au!
+  augroup END
+  let $XAUTODIR = 'Xfoo'
+
+  " New behavior: duplicate ++once now aborts, the autocmd is not added
+  call assert_fails('au XdupTest WinNew $XAUTODIR/* ++once ++once echo bad', 'E983:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  call assert_fails('au XdupTest WinNew $XAUTODIR/* ++nested ++nested echo bad', 'E983:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  call assert_fails('au XdupTest WinNew $XAUTODIR/* nested nested echo bad', 'E983:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  " "nested" without "++" is rejected in Vim9 script (also frees the pattern)
+  call assert_fails('vim9cmd au XdupTest WinNew $XAUTODIR/* nested echo bad', 'E1078:')
+  call assert_false(exists('#XdupTest#WinNew'))
+
+  augroup XdupTest
+    au!
+  augroup END
+  augroup! XdupTest
+  let $XAUTODIR = ''
+endfunc
+
 
 func Test_autocmd_bufreadpre()
   new
@@ -4035,6 +4068,92 @@ func Test_autocmd_with_block()
   augroup block_testing
     au!
   augroup END
+endfunc
+
+" Test for a {} block at script level in an :autocmd nested in another one
+func Test_autocmd_nested_block()
+  let lines =<< trim END
+      vim9script
+      autocmd CursorHold * autocmd BufReadPre * ++once {
+            g:nested_block = 'yes'
+          }
+  END
+  call writefile(lines, 'XautoNestedBlock', 'D')
+  source XautoNestedBlock
+
+  doautocmd CursorHold
+  doautocmd BufReadPre
+  call assert_equal('yes', g:nested_block)
+
+  unlet g:nested_block
+  au! CursorHold
+  au! BufReadPre
+endfunc
+
+" Test for a {} block in an :autocmd nested two levels deep
+func Test_autocmd_nested_block_twice()
+  let lines =<< trim END
+      vim9script
+      autocmd CursorHold * autocmd CursorHoldI * autocmd BufReadPre * ++once {
+            g:nested_twice = 'yes'
+          }
+  END
+  call writefile(lines, 'XautoNestedTwice', 'D')
+  source XautoNestedTwice
+
+  doautocmd CursorHold
+  doautocmd CursorHoldI
+  doautocmd BufReadPre
+  call assert_equal('yes', g:nested_twice)
+
+  unlet g:nested_twice
+  au! CursorHold
+  au! CursorHoldI
+  au! BufReadPre
+endfunc
+
+" Only the :autocmd owning the block uses Vim9 syntax, the one it is nested in
+" keeps the syntax of the script.  The old "nested" is valid in legacy script
+" but an error in Vim9 script, so it tells the two apart.
+func Test_autocmd_nested_block_legacy_script()
+  let lines =<< trim END
+      autocmd CursorHold * autocmd BufReadPre * nested {
+            g:legacy_block = 'yes'
+          }
+  END
+  call writefile(lines, 'XautoNestedLegacy', 'D')
+  source XautoNestedLegacy
+
+  doautocmd CursorHold
+  doautocmd BufReadPre
+  call assert_equal('yes', g:legacy_block)
+
+  unlet g:legacy_block
+  au! CursorHold
+  au! BufReadPre
+endfunc
+
+" A trailing "{" that is an argument of the command does not start a block,
+" the lines after it are not swallowed
+func Test_autocmd_trailing_curly_no_block()
+  let lines =<< trim END
+      vim9script
+      autocmd CursorHold * normal! {
+      g:after_autocmd = 'reached'
+  END
+  call writefile(lines, 'XautoTrailingCurly', 'D')
+  source XautoTrailingCurly
+  call assert_equal('reached', g:after_autocmd)
+
+  new
+  call setline(1, ['one', '', 'two'])
+  call cursor(3, 1)
+  doautocmd CursorHold
+  call assert_equal(2, line('.'))
+
+  bwipe!
+  unlet g:after_autocmd
+  au! CursorHold
 endfunc
 
 func Test_closing_autocmd_window()
@@ -5837,6 +5956,27 @@ func Test_VimResized_and_window_width_not_equalized()
   call WaitForAssert({-> assert_match('^window_width: 10$', term_getline(buf, 10))}, 1000)
 
   call StopVimInTerminal(buf)
+endfunc
+
+func Test_WinResized_on_shell_resize()
+  CheckRunVimInTerminal
+
+  " A shell (terminal/GUI) resize changes window sizes, so WinResized must
+  " trigger from the resize alone, not only on the next typed command.
+  let lines =<< trim END
+    autocmd WinResized * call writefile(['x'], 'XwinResized', 'a')
+  END
+  call writefile(lines, 'XTest_WinResized_shell', 'D')
+  let buf = RunVimInTerminal('-S XTest_WinResized_shell', {'rows': 10, 'cols': 30})
+  call TermWait(buf)
+  call delete('XwinResized')
+
+  " Resize the terminal (SIGWINCH); do not send any key to the inner Vim.
+  call term_setsize(buf, 15, 40)
+  call WaitForAssert({-> assert_true(filereadable('XwinResized'))})
+
+  call StopVimInTerminal(buf)
+  call delete('XwinResized')
 endfunc
 
 func Test_win_tabclose_autocmd()

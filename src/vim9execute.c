@@ -4180,9 +4180,30 @@ exec_instructions(ectx_T *ectx)
 
 		    if (di == NULL)
 		    {
-			SOURCING_LNUM = iptr->isn_lnum;
-			semsg(_(e_undefined_variable_str), name);
-			goto on_error;
+			ufunc_T	*ufunc = NULL;
+
+			if (iptr->isn_type == ISN_LOADEXPORT)
+			{
+			    type_T	*type;
+
+			    // Not a variable, it can be an exported function
+			    // used as a value.
+			    (void)find_exported(sid, name, &ufunc, &type,
+							 NULL, NULL, FALSE);
+			}
+			if (ufunc == NULL)
+			{
+			    SOURCING_LNUM = iptr->isn_lnum;
+			    semsg(_(e_undefined_variable_str), name);
+			    goto on_error;
+			}
+			if (GA_GROW_FAILS(&ectx->ec_stack, 1))
+			    goto theend;
+			tv = STACK_TV_BOT(0);
+			tv->v_lock = 0;
+			++ectx->ec_stack.ga_len;
+			tv->v_type = VAR_FUNC;
+			tv->vval.v_string = vim_strsave(ufunc->uf_name);
 		    }
 		    else
 		    {
@@ -7330,9 +7351,10 @@ list_instructions(char *pfx, isn_T *instr, int instr_count, ufunc_T *ufunc)
 		{
 		    isn_outer_T *outer = &iptr->isn_arg.outer;
 
-		    if (outer->outer_depth == OUTER_LOOP_DEPTH)
-			smsg("%s%4d STOREOUTER level 1 $%d in loop",
-				pfx, current, outer->outer_idx);
+		    if (outer->outer_depth < 0)
+			smsg("%s%4d STOREOUTER $%d in loop level %d",
+				pfx, current, outer->outer_idx,
+				-outer->outer_depth);
 		    else
 			smsg("%s%4d STOREOUTER level %d $%d", pfx, current,
 				outer->outer_depth, outer->outer_idx);

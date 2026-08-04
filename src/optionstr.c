@@ -1131,6 +1131,32 @@ did_set_ambiwidth(optset_T *args UNUSED)
     return check_chars_options();
 }
 
+#if defined(FEAT_TABPANEL) || defined(FEAT_DIFF) || defined(FEAT_PROP_POPUP)
+
+// "name" must be a string literal, the length is computed at compile time.
+# define completing_value_for_subopt(args, name) \
+	  completing_value_for_subopt_len(args, name, (int)STRLEN_LITERAL(name))
+
+/*
+ * Return true when completing the value of the sub-option "name" with length
+ * "len", e.g. the value after "close:" in 'completepopup'.
+ */
+    static bool
+completing_value_for_subopt_len(optexpand_T *args, char *name, int len)
+{
+    char_u  *colon = args->oe_xp->xp_pattern - 1;
+    int	    off = (int)(colon - args->oe_set_arg);
+
+    if (off < len)
+	return false;
+    // The name must follow a comma when it does not start the option value.
+    if (off > len && *(colon - len - 1) != ',')
+	return false;
+
+    return STRNCMP(colon - len, name, len) == 0;
+}
+#endif
+
     int
 expand_set_ambiwidth(optexpand_T *args, int *numMatches, char_u ***matches)
 {
@@ -2204,10 +2230,7 @@ expand_set_diffopt(optexpand_T *args, int *numMatches, char_u ***matches)
 
     if (xp->xp_pattern > args->oe_set_arg && *(xp->xp_pattern-1) == ':')
     {
-	// Within "algorithm:", we have a subgroup of possible options.
-	int algo_len = (int)STRLEN("algorithm:");
-	if (xp->xp_pattern - args->oe_set_arg >= algo_len &&
-		STRNCMP(xp->xp_pattern - algo_len, "algorithm:", algo_len) == 0)
+	if (completing_value_for_subopt(args, "algorithm"))
 	{
 	    return expand_set_opt_string(
 		    args,
@@ -2216,10 +2239,7 @@ expand_set_diffopt(optexpand_T *args, int *numMatches, char_u ***matches)
 		    numMatches,
 		    matches);
 	}
-	// Within "inline:", we have a subgroup of possible options.
-	int inline_len = (int)STRLEN("inline:");
-	if (xp->xp_pattern - args->oe_set_arg >= inline_len &&
-		STRNCMP(xp->xp_pattern - inline_len, "inline:", inline_len) == 0)
+	if (completing_value_for_subopt(args, "inline"))
 	{
 	    return expand_set_opt_string(
 		    args,
@@ -3508,20 +3528,9 @@ expand_set_popupoption(optexpand_T *args, int *numMatches, char_u ***matches,
 
     if (xp->xp_pattern > args->oe_set_arg && *(xp->xp_pattern-1) == ':')
     {
-	// Within "highlight:"/"border:"/"align:", we have a subgroup of possible options.
-	int border_len = (int)STRLEN("border:");
-	int close_len = (int)STRLEN("close:");
-	int resize_len = (int)STRLEN("resize:");
-	int shadow_len = (int)STRLEN("shadow:");
-	int is_border = xp->xp_pattern - args->oe_set_arg >= border_len &&
-		STRNCMP(xp->xp_pattern - border_len, "border:", border_len) == 0;
-	int is_close = xp->xp_pattern - args->oe_set_arg >= close_len &&
-		STRNCMP(xp->xp_pattern - close_len, "close:", close) == 0;
-	int is_resize = xp->xp_pattern - args->oe_set_arg >= resize_len &&
-		STRNCMP(xp->xp_pattern - resize_len, "resize:", resize_len) == 0;
-	int is_shadow = xp->xp_pattern - args->oe_set_arg >= shadow_len &&
-		STRNCMP(xp->xp_pattern - shadow_len, "shadow:", shadow_len) == 0;
-	if (is_close || is_resize || is_shadow)
+	if (completing_value_for_subopt(args, "close")
+		|| completing_value_for_subopt(args, "resize")
+		|| completing_value_for_subopt(args, "shadow"))
 	{
 	    return expand_set_opt_string(
 		    args,
@@ -3530,7 +3539,7 @@ expand_set_popupoption(optexpand_T *args, int *numMatches, char_u ***matches,
 		    numMatches,
 		    matches);
 	}
-	if (is_border)
+	if (completing_value_for_subopt(args, "border"))
 	{
 	    return expand_set_opt_string(
 		    args,
@@ -3541,9 +3550,7 @@ expand_set_popupoption(optexpand_T *args, int *numMatches, char_u ***matches,
 		    numMatches,
 		    matches);
 	}
-	int align_len = (int)STRLEN("align:");
-	if (xp->xp_pattern - args->oe_set_arg >= align_len &&
-		STRNCMP(xp->xp_pattern - align_len, "align:", align_len) == 0)
+	if (completing_value_for_subopt(args, "align"))
 	{
 	    return expand_set_opt_string(
 		    args,
@@ -3552,16 +3559,8 @@ expand_set_popupoption(optexpand_T *args, int *numMatches, char_u ***matches,
 		    numMatches,
 		    matches);
 	}
-	int highlight_len = (int)STRLEN("highlight:");
-	int borderhighlight_len = (int)STRLEN("borderhighlight:");
-	int is_highlight = xp->xp_pattern - args->oe_set_arg >= highlight_len
-	    && STRNCMP(xp->xp_pattern - highlight_len, "highlight:",
-		    highlight_len) == 0;
-	int is_borderhighlight
-	    = xp->xp_pattern - args->oe_set_arg >= borderhighlight_len
-	    && STRNCMP(xp->xp_pattern - borderhighlight_len, "highlight:",
-		    borderhighlight_len) == 0;
-	if (is_highlight || is_borderhighlight)
+	if (completing_value_for_subopt(args, "highlight")
+		|| completing_value_for_subopt(args, "borderhighlight"))
 	{
 	    // Return the list of all highlight names
 	    return expand_set_opt_generic(
@@ -4042,10 +4041,7 @@ expand_set_tabpanelopt(optexpand_T *args, int *numMatches, char_u ***matches)
 
     if (xp->xp_pattern > args->oe_set_arg && *(xp->xp_pattern-1) == ':')
     {
-	// Within "align:", we have a subgroup of possible options.
-	int align_len = (int)STRLEN("align:");
-	if (xp->xp_pattern - args->oe_set_arg >= align_len &&
-		STRNCMP(xp->xp_pattern - align_len, "align:", align_len) == 0)
+	if (completing_value_for_subopt(args, "align"))
 	{
 	    return expand_set_opt_string(
 		    args,

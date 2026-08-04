@@ -3334,7 +3334,9 @@ win_line(
 		if (c == TAB && (!wp->w_p_list || wp->w_lcs_chars.tab1))
 		{
 		    int	    tab_len = 0;
-		    long    vcol_adjusted = wlv.vcol; // removed showbreak len
+		    // Virtual text and 'showbreak' do not count for the size
+		    // of a Tab.
+		    long    vcol_adjusted = wlv.vcol - wlv.vcol_off_tp;
 		    int	    lcs_tab1 = wp->w_lcs_chars.tab1;
 		    int	    lcs_tab2 = wp->w_lcs_chars.tab2;
 		    int	    lcs_tab3 = wp->w_lcs_chars.tab3;
@@ -3353,7 +3355,7 @@ win_line(
 		    // only adjust the tab_len, when at the first column
 		    // after the showbreak value was drawn
 		    if (*sbr != NUL && wlv.vcol == wlv.vcol_sbr && wp->w_p_wrap)
-			vcol_adjusted = wlv.vcol - MB_CHARLEN(sbr);
+			vcol_adjusted -= MB_CHARLEN(sbr);
 #endif
 		    // tab amount depends on current column
 #ifdef FEAT_VARTABS
@@ -3696,6 +3698,17 @@ win_line(
 			else if (wlv.line_attr)
 			    wlv.char_attr = hl_combine_attr(
 						 wlv.char_attr, wlv.line_attr);
+			// Show a Visual or search highlight on the first cell
+			// of an empty line, on top of the background color.
+			if (wlv.vcol == 0)
+			{
+			    if (area_attr != 0)
+				wlv.char_attr = hl_combine_attr(
+						     wlv.char_attr, area_attr);
+			    else if (search_attr != 0)
+				wlv.char_attr = hl_combine_attr(
+						   wlv.char_attr, search_attr);
+			}
 		    }
 # endif
 		}
@@ -3802,6 +3815,10 @@ win_line(
 	    else
 # endif
 		wp->w_wcol = wlv.col - wlv.boguscols;
+	    // Screen cells concealed before the cursor on this screen line, so
+	    // pum_display() can line the menu up with the visible text;
+	    // "skip_cells" is the concealed cell at the cursor not yet counted.
+	    wp->w_wcol_conceal_off = wlv.vcol_off_co + skip_cells;
 	    if (wlv.vcol + skip_cells < wp->w_virtcol)
 		// Cursor beyond end of the line with 'virtualedit'.
 		wp->w_wcol += wp->w_virtcol - wlv.vcol - skip_cells;

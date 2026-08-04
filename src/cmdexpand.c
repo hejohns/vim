@@ -458,7 +458,7 @@ cmdline_pum_display(void)
 {
     if (p_po > 0 && p_po < 100 && !pum_redraw_in_same_position())
 	pum_call_update_screen();
-    pum_display(compl_match_array, compl_match_arraysize, compl_selected);
+    pum_display(compl_match_array, compl_match_arraysize, compl_selected, -1);
 }
 
 /*
@@ -2455,13 +2455,13 @@ set_context_in_filetype_cmd(expand_T *xp, char_u *arg)
 
     for (;;)
     {
-	if (STRNCMP(p, "plugin", 6) == 0)
+	if (STRNCMP(p, "plugin", 6) == 0 && VIM_ISWHITE(p[6]))
 	{
 	    val |= EXPAND_FILETYPECMD_PLUGIN;
 	    p = skipwhite(p + 6);
 	    continue;
 	}
-	if (STRNCMP(p, "indent", 6) == 0)
+	if (STRNCMP(p, "indent", 6) == 0 && VIM_ISWHITE(p[6]))
 	{
 	    val |= EXPAND_FILETYPECMD_INDENT;
 	    p = skipwhite(p + 6);
@@ -3346,7 +3346,9 @@ expand_files_and_dirs(
     if (free_pat)
 	vim_free(pat);
 #ifdef BACKSLASH_IN_FILENAME
-    if (p_csl[0] != NUL && (options & WILD_IGNORE_COMPLETESLASH) == 0)
+    if (p_csl[0] != NUL
+	    && (options & WILD_IGNORE_COMPLETESLASH) == 0
+	    && xp->xp_context != EXPAND_FINDFUNC)
     {
 	int j;
 
@@ -3392,9 +3394,9 @@ get_filetypecmd_arg(expand_T *xp UNUSED, int idx)
     if (idx < 0)
 	return NULL;
 
-    if (filetype_expand_what == EXP_FILETYPECMD_ALL && idx < 4)
+    if (filetype_expand_what == EXP_FILETYPECMD_ALL && idx < 5)
     {
-	char	*opts_all[] = {"indent", "plugin", "on", "off"};
+	char	*opts_all[] = {"detect", "indent", "plugin", "on", "off"};
 	return (char_u *)opts_all[idx];
     }
     if (filetype_expand_what == EXP_FILETYPECMD_PLUGIN && idx < 3)
@@ -5040,6 +5042,8 @@ f_cmdcomplete_info(typval_T *argvars UNUSED, typval_T *rettv)
 	if (li == NULL)
 	    return;
 	ret = dict_add_list(retdict, "matches", li);
+	if (ret == FAIL)
+	    list_unref(li);
 	for (idx = 0; ret == OK && idx < ccline->xpc->xp_numfiles; idx++)
 	    list_append_string(li, ccline->xpc->xp_files[idx], -1);
     }

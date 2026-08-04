@@ -174,6 +174,8 @@ vim_form_move_resize(
 	gint	    h)
 {
     gtk_widget_set_size_request(widget, w, h);
+    if (!gtk_widget_get_visible(widget))
+	gtk_widget_queue_resize(widget);
     vim_form_move(self, widget, x, y);
 }
 
@@ -209,18 +211,13 @@ vim_form_snapshot(GtkWidget *widget, GtkSnapshot *snapshot)
     static gboolean
 vim_form_resize_idle_cb(VimForm *self)
 {
-    int w, h;
-
     self->resize_idle_id = 0;
 
-    // Use drawarea's actual allocation, not formwin's
     if (gui.drawarea == NULL)
 	goto exit;
-    w = gtk_widget_get_width(gui.drawarea);
-    h = gtk_widget_get_height(gui.drawarea);
 
-    if (w > 1 && h > 1)
-	gui_resize_shell(w, h);
+    if (self->last_width > 1 && self->last_height > 1)
+	gui_resize_shell(self->last_width, self->last_height);
 
 exit:
     g_object_unref(self);

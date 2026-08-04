@@ -1,4 +1,4 @@
-*syntax.txt*	For Vim version 9.2.  Last change: 2026 Jun 01
+*syntax.txt*	For Vim version 9.2.  Last change: 2026 Aug 02
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -1261,6 +1261,7 @@ cpp_no_cpp14		don't highlight C++14 standard items
 cpp_no_cpp17		don't highlight C++17 standard items
 cpp_no_cpp20		don't highlight C++20 standard items
 cpp_no_cpp23		don't highlight C++23 standard items
+cpp_no_cpp26		don't highlight C++26 standard items
 
 
 CSH						*csh.vim* *ft-csh-syntax*
@@ -4155,6 +4156,7 @@ Some folding is now supported with when 'foldmethod' is set to "syntax": >
    g:vimsyn_folding =~# 'P' : fold Python   heredocs
    g:vimsyn_folding =~# 'r' : fold Ruby     heredocs
    g:vimsyn_folding =~# 't' : fold Tcl      heredocs
+   g:vimsyn_folding =~# 'T' : fold :append, :change and :insert
 <
 
 By default, g:vimsyn_folding is unset.  Concatenate the indicated characters
@@ -5869,6 +5871,8 @@ font={font-name}					*highlight-font*
 	When setting the font for the "Normal" group, this becomes the default
 	font (until the 'guifont' option is changed; the last one set is
 	used).
+	In the GTK GUI, a font can only be set for the "Normal" group; for
+	other groups it is accepted but has no effect.
 	The following only works with Motif, not with other GUIs:
 	When setting the font for the "Menu" group, the menus will be changed.
 	When setting the font for the "Tooltip" group, the tooltips will be
@@ -5879,7 +5883,7 @@ font={font-name}					*highlight-font*
 	To use a font name with an embedded space or other special character,
 	put it in single quotes.  The single quote cannot be used then.
 	Example: >
-	    :hi comment font='Monospace 10'
+	    :hi Normal font='Monospace 10'
 
 guifg={color-name}					*highlight-guifg*
 guibg={color-name}					*highlight-guibg*

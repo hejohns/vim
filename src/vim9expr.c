@@ -1795,9 +1795,26 @@ compile_lambda(char_u **arg, cctx_T *cctx)
     clear_tv(&rettv);
 
     if (cctx->ctx_ufunc != NULL)
+    {
 	// This lambda might be defined in a class method.  Inherit the class
 	// from the current function.
 	ufunc->uf_defclass = cctx->ctx_ufunc->uf_defclass;
+
+	// Copy over the block scope IDs, so that a script variable declared in
+	// an enclosing block can be found.
+	int block_depth = cctx->ctx_ufunc->uf_block_depth;
+
+	if (block_depth > 0)
+	{
+	    ufunc->uf_block_ids = ALLOC_MULT(int, block_depth);
+	    if (ufunc->uf_block_ids != NULL)
+	    {
+		mch_memmove(ufunc->uf_block_ids, cctx->ctx_ufunc->uf_block_ids,
+						    sizeof(int) * block_depth);
+		ufunc->uf_block_depth = block_depth;
+	    }
+	}
+    }
 
     // Compile it here to get the return type.  The return type is optional,
     // when it's missing use t_unknown.  This is recognized in
@@ -1930,7 +1947,7 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 	    // {[expr]: value} uses an evaluated key.
 	    *arg = skipwhite(*arg + 1);
 	    if (compile_expr0(arg, cctx) == FAIL)
-		return FAIL;
+		goto failret;
 	    isn = ((isn_T *)instr->ga_data) + instr->ga_len - 1;
 	    if (isn->isn_type == ISN_PUSHNR)
 	    {
@@ -1944,12 +1961,12 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 	    if (isn->isn_type == ISN_PUSHS)
 		key = isn->isn_arg.string;
 	    else if (may_generate_2STRING(-1, TOSTRING_NONE, cctx) == FAIL)
-		return FAIL;
+		goto failret;
 	    *arg = skipwhite(*arg);
 	    if (**arg != ']')
 	    {
 		emsg(_(e_missing_matching_bracket_after_dict_key));
-		return FAIL;
+		goto failret;
 	    }
 	    ++*arg;
 	}
@@ -1960,9 +1977,9 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 	    // {name: value} use "name" as a literal key
 	    key = get_literal_key(arg);
 	    if (key == NULL)
-		return FAIL;
+		goto failret;
 	    if (generate_PUSHS(cctx, &key) == FAIL)
-		return FAIL;
+		goto failret;
 	}
 
 	// Check for duplicate keys, if using string keys.
@@ -1990,13 +2007,13 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 		semsg(_(e_no_white_space_allowed_before_str_str), ":", *arg);
 	    else
 		semsg(_(e_missing_colon_in_dictionary_str), *arg);
-	    return FAIL;
+	    goto failret;
 	}
 	whitep = *arg + 1;
 	if (!IS_WHITE_OR_NUL(*whitep))
 	{
 	    semsg(_(e_white_space_required_after_str_str), ":", *arg);
-	    return FAIL;
+	    goto failret;
 	}
 
 	if (may_get_next_line(whitep, arg, cctx) == FAIL)
@@ -2006,7 +2023,7 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 	}
 
 	if (compile_expr0_ext(arg, cctx, &is_const) == FAIL)
-	    return FAIL;
+	    goto failret;
 	if (!is_const)
 	    is_all_const = FALSE;
 	++count;
@@ -2027,13 +2044,13 @@ compile_dict(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 	if (IS_WHITE_OR_NUL(*whitep))
 	{
 	    semsg(_(e_no_white_space_allowed_before_str_str), ",", whitep);
-	    return FAIL;
+	    goto failret;
 	}
 	whitep = *arg + 1;
 	if (!IS_WHITE_OR_NUL(*whitep))
 	{
 	    semsg(_(e_white_space_required_after_str_str), ",", *arg);
-	    return FAIL;
+	    goto failret;
 	}
 	*arg = skipwhite(whitep);
     }
@@ -3377,6 +3394,7 @@ compile_expr6(char_u **arg, cctx_T *cctx, ppconst_T *ppconst)
 		tv1->vval.v_string = alloc(len1 + STRLEN(s2) + 1);
 		if (tv1->vval.v_string == NULL)
 		{
+		    vim_free(s1);
 		    clear_ppconst(ppconst);
 		    return FAIL;
 		}

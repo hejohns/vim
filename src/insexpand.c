@@ -136,6 +136,56 @@ static compl_T    *compl_curr_match = NULL;
 static compl_T    *compl_shown_match = NULL;
 static compl_T    *compl_old_match = NULL;
 
+// Hashtab with the strings of the matches in the list above, except the
+// original-text entries.  Used to make the duplicate check O(1) instead of
+// a scan of the whole list.  Each entry owns a copy of the string and
+// counts the matches with that string, so that when matches were added
+// with "adup" the entry remains until the last match with the string is
+// removed.
+typedef struct
+{
+    int	    cse_count;	// number of matches with this string
+    char_u  cse_str[1];	// the string, actually longer
+} complstr_T;
+
+#define CSE_OFF		((int)offsetof(complstr_T, cse_str))
+#define HI2CSE(hi)	((complstr_T *)((hi)->hi_key - CSE_OFF))
+
+static hashtab_T  compl_strings_ht;
+
+/*
+ * Count the string of a new match in the duplicate-check hashtab.
+ * "hash" is the hash of "str" when it is not zero, saving hashing the
+ * string again.
+ */
+    static void
+compl_strings_add(char_u *str, size_t len, hash_T hash)
+{
+    hashitem_T	*hi;
+    complstr_T	*entry;
+
+    if (compl_strings_ht.ht_array == NULL)
+	hash_init(&compl_strings_ht);
+    if (hash == 0)
+	hash = hash_hash(str);
+    hi = hash_lookup(&compl_strings_ht, str, hash);
+    if (HASHITEM_EMPTY(hi))
+    {
+	entry = alloc(CSE_OFF + len + 1);
+	if (entry == NULL)
+	    // Out of memory: the duplicate check degrades, an equal string
+	    // added later is not recognized as a duplicate.
+	    return;
+	entry->cse_count = 1;
+	vim_strncpy(entry->cse_str, str, len);
+	if (hash_add_item(&compl_strings_ht, hi, entry->cse_str, hash)
+								      == FAIL)
+	    vim_free(entry);
+    }
+    else
+	++HI2CSE(hi)->cse_count;
+}
+
 // list used to store the compl_T which have the max score
 static compl_T	  **compl_best_matches = NULL;
 static int	  compl_num_bests = 0;
@@ -205,6 +255,10 @@ static buf_T	  *compl_curr_buf = NULL;  // buf where completion is active
 // longer fixed timeout is used (COMPL_FUNC_TIMEOUT_MS or
 // COMPL_FUNC_TIMEOUT_NON_KW_MS). - girish
 static int	  compl_autocomplete = FALSE;	    // whether autocompletion is active
+static bool	  compl_autocomplete_pending = false;
+#ifdef ELAPSED_FUNC
+static elapsed_T  compl_autocomplete_start_tv;	    // when the delay was armed
+#endif
 static int	  compl_timeout_ms = COMPL_INITIAL_TIMEOUT_MS;
 static int	  compl_time_slice_expired = FALSE; // time budget exceeded for current source
 static int	  compl_from_nonkeyword = FALSE;    // completion started from non-keyword
@@ -699,6 +753,7 @@ ins_compl_infercase_gettext(
 	    if (ga_grow(&gap, 10) == FAIL)
 	    {
 		ga_clear(&gap);
+		vim_free(wca);
 		return (char_u *)"[failed]";
 	    }
 	    p = (char_u *)gap.ga_data + gap.ga_len;
@@ -897,6 +952,8 @@ ins_compl_add(
     int		dir = (cdir == 0 ? compl_direction : cdir);
     int		flags = flags_arg;
     int		inserted = FALSE;
+    char_u	*new_str = NULL;
+    hash_T	str_hash = 0;	    // hash of the match string, when not 0
 
     if (flags & CP_FAST)
 	fast_breakcheck();
@@ -908,22 +965,53 @@ ins_compl_add(
 	len = (int)STRLEN(str);
 
     // If the same match is already present, don't add it.
-    if (compl_first_match != NULL && !adup)
+    if (compl_first_match != NULL && !adup && compl_strings_ht.ht_used > 0)
     {
-	match = compl_first_match;
-	do
+	// Use a stack buffer for the NUL-terminated key when it fits, so
+	// that rejecting a duplicate does not allocate memory.
+	char_u	    keybuf[128];
+	char_u	    *key;
+	hashitem_T  *hi;
+
+	if (len < (int)sizeof(keybuf))
 	{
-	    if (!match_at_original_text(match)
-		    && STRNCMP(match->cp_str.string, str, len) == 0
-		    && ((int)match->cp_str.length <= len
-						 || match->cp_str.string[len] == NUL))
+	    mch_memmove(keybuf, str, (size_t)len);
+	    keybuf[len] = NUL;
+	    key = keybuf;
+	}
+	else
+	{
+	    new_str = vim_strnsave(str, len);
+	    if (new_str == NULL)
+		return FAIL;
+	    key = new_str;
+	}
+	str_hash = hash_hash(key);
+	hi = hash_lookup(&compl_strings_ht, key, str_hash);
+	if (!HASHITEM_EMPTY(hi))
+	{
+	    if (is_nearest_active() && score > 0)
 	    {
-		if (is_nearest_active() && score > 0 && score < match->cp_score)
-		    match->cp_score = score;
-		return NOTDONE;
+		// The duplicate may need its score updated, scan the
+		// matches to find it.
+		match = compl_first_match;
+		do
+		{
+		    if (!match_at_original_text(match)
+			    && STRNCMP(match->cp_str.string, str, len) == 0
+			    && ((int)match->cp_str.length <= len
+					  || match->cp_str.string[len] == NUL))
+		    {
+			if (score < match->cp_score)
+			    match->cp_score = score;
+			break;
+		    }
+		    match = match->cp_next;
+		} while (match != NULL && !is_first_match(match));
 	    }
-	    match = match->cp_next;
-	} while (match != NULL && !is_first_match(match));
+	    vim_free(new_str);
+	    return NOTDONE;
+	}
     }
 
     // Remove any popup menu before changing the list of matches.
@@ -933,14 +1021,17 @@ ins_compl_add(
     // Copy the values to the new match structure.
     match = ALLOC_CLEAR_ONE(compl_T);
     if (match == NULL)
+    {
+	vim_free(new_str);
 	return FAIL;
+    }
     match->cp_number = flags & CP_ORIGINAL_TEXT ? 0 : -1;
-    if ((match->cp_str.string = vim_strnsave(str, len)) == NULL)
+    if (new_str == NULL && (new_str = vim_strnsave(str, len)) == NULL)
     {
 	vim_free(match);
 	return FAIL;
     }
-
+    match->cp_str.string = new_str;
     match->cp_str.length = len;
 
     // match-fname is:
@@ -1029,6 +1120,10 @@ ins_compl_add(
     else	// if there's nothing before, it is the first match
 	compl_first_match = match;
     compl_curr_match = match;
+
+    if (!match_at_original_text(match))
+	compl_strings_add(match->cp_str.string, match->cp_str.length,
+								    str_hash);
 
     // Find the longest common string if still doing that.
     if (compl_get_longest && (flags & CP_ORIGINAL_TEXT) == 0 && !cot_fuzzy()
@@ -1359,17 +1454,7 @@ ins_compl_del_pum(void)
 pum_wanted(void)
 {
     // 'completeopt' must contain "menu" or "menuone"
-    if ((get_cot_flags() & COT_ANY_MENU) == 0 && !compl_autocomplete)
-	return FALSE;
-
-    // The display looks bad on a B&W display.
-    if (t_colors < 8
-#ifdef FEAT_GUI
-	    && !gui.in_use
-#endif
-	    )
-	return FALSE;
-    return TRUE;
+    return (get_cot_flags() & COT_ANY_MENU) != 0 || compl_autocomplete;
 }
 
 /*
@@ -1888,13 +1973,19 @@ ins_compl_show_pum(void)
     // part of the screen would be updated.  We do need to redraw here.
     dollar_vcol = -1;
 
-    // Compute the screen column of the start of the completed text.
-    // Use the cursor to get all wrapping and other settings right.
+    // Position the menu at the completion start without moving the cursor
+    // there, so the ruler keeps showing the real cursor column.
     col = curwin->w_cursor.col;
     curwin->w_cursor.col = compl_col;
-    compl_selected_item = cur;
-    pum_display(compl_match_array, compl_match_arraysize, cur);
+    validate_cursor_col();
+    int pum_wcol = curwin->w_wcol;
     curwin->w_cursor.col = col;
+    validate_cursor_col();
+    compl_selected_item = cur;
+    // Flag the status line so the ruler is redrawn for the real cursor column
+    // when the menu update redraws the screen.
+    curwin->w_redr_status = true;
+    pum_display(compl_match_array, compl_match_arraysize, cur, pum_wcol);
 
     // After adding leader, set the current match to shown match.
     if (compl_started && compl_curr_match != compl_shown_match)
@@ -2262,6 +2353,25 @@ find_line_end(char_u *ptr)
     static void
 ins_compl_item_free(compl_T *match)
 {
+    // Uncount the match string in the duplicate-check hashtab; the entry is
+    // only removed with its last match.  The hashtab is empty when it was
+    // already cleared as a whole by ins_compl_free().
+    if (compl_strings_ht.ht_used > 0 && match->cp_str.string != NULL
+					   && !match_at_original_text(match))
+    {
+	hashitem_T *hi = hash_find(&compl_strings_ht, match->cp_str.string);
+
+	if (!HASHITEM_EMPTY(hi))
+	{
+	    complstr_T *entry = HI2CSE(hi);
+
+	    if (--entry->cse_count <= 0)
+	    {
+		hash_remove(&compl_strings_ht, hi, "completion match");
+		vim_free(entry);
+	    }
+	}
+    }
     VIM_CLEAR_STRING(match->cp_str);
     // several entries may use the same fname, free it just once.
     if (match->cp_flags & CP_FREE_FNAME)
@@ -2290,6 +2400,11 @@ ins_compl_free(void)
 
     ins_compl_del_pum();
     pum_clear();
+
+    // Free the duplicate-check hashtab entries all at once, then freeing
+    // the matches below does not need to uncount them one by one.
+    hash_clear_all(&compl_strings_ht, CSE_OFF);
+    hash_init(&compl_strings_ht);
 
     compl_curr_match = compl_first_match;
     do
@@ -2557,12 +2672,6 @@ ins_compl_new_leader(void)
     ins_compl_insert_bytes(compl_leader.string + get_compl_len(), -1);
     compl_used_match = FALSE;
 
-    if (p_acl > 0)
-    {
-	update_screen(UPD_VALID); // Show char (deletion) immediately
-	out_flush();
-    }
-
     if (compl_started)
     {
 	ins_compl_set_original_text(compl_leader.string, compl_leader.length);
@@ -2602,7 +2711,9 @@ ins_compl_new_leader(void)
 
     compl_enter_selects = !compl_used_match && compl_selected_item != -1;
 
-    // Show the popup menu with a different set of matches.
+    // Show the popup menu with a different set of matches.  With
+    // 'autocompletedelay' the menu is already visible here, so update it
+    // immediately rather than re-arming the delay, like a zero delay does.
     if (!compl_interrupted)
 	show_pum(save_w_wrow, save_w_leftcol);
 
@@ -3878,7 +3989,7 @@ set_completion(colnr_T startcol, list_T *list)
     int compl_no_select = (cur_cot_flags & COT_NOSELECT) != 0;
 
     // If already doing completions stop it.
-    if (ctrl_x_mode_not_default())
+    if (compl_started || ctrl_x_mode_not_default())
 	ins_compl_prep(' ');
     ins_compl_clear();
     ins_compl_free();
@@ -4169,6 +4280,8 @@ get_complete_info(list_T *what_list, dict_T *retdict)
 		return;
 	    ret = dict_add_list(retdict, (has_matches && !has_items)
 						? "matches" : "items", li);
+	    if (ret == FAIL)
+		list_unref(li);
 	}
 	if (ret == OK && what_flag & CI_WHAT_SELECTED)
 	    if (compl_curr_match != NULL && compl_curr_match->cp_number == -1)
@@ -4189,7 +4302,10 @@ get_complete_info(list_T *what_list, dict_T *retdict)
 			    return;
 			ret = list_append_dict(li, di);
 			if (ret != OK)
+			{
+			    dict_unref(di);
 			    return;
+			}
 			fill_complete_info_dict(di, match, has_matches && has_items);
 		    }
 		    if (compl_curr_match != NULL
@@ -4212,6 +4328,8 @@ get_complete_info(list_T *what_list, dict_T *retdict)
 		return;
 	    fill_complete_info_dict(di, compl_curr_match, FALSE);
 	    ret = dict_add_dict(retdict, "completed", di);
+	    if (ret == FAIL)
+		dict_unref(di);
 	}
     }
 }
@@ -6211,7 +6329,6 @@ ins_compl_next(
     int	    compl_no_insert = (cur_cot_flags & COT_NOINSERT) != 0
 		    || (compl_autocomplete && !ins_compl_has_preinsert());
     int	    compl_preinsert = ins_compl_has_preinsert();
-    int	    has_autocomplete_delay = (compl_autocomplete && p_acl > 0);
 
     // When user complete function return -1 for findstart which is next
     // time of 'always', compl_shown_match become NULL.
@@ -6255,11 +6372,7 @@ ins_compl_next(
 
     // Insert the text of the new completion, or the compl_leader.
     if (!started && ins_compl_preinsert_longest())
-    {
 	ins_compl_insert(TRUE, TRUE);
-	if (has_autocomplete_delay)
-	    update_screen(0);  // Show the inserted text right away
-    }
     else if (compl_no_insert && !started && !compl_preinsert)
     {
 	ins_compl_insert_bytes(compl_orig_text.string + get_compl_len(), -1);
@@ -6285,7 +6398,7 @@ ins_compl_next(
 	// may undisplay the popup menu first
 	ins_compl_upd_pum();
 
-	if (pum_enough_matches() && !has_autocomplete_delay)
+	if (pum_enough_matches())
 	    // Will display the popup menu, don't redraw yet to avoid flicker.
 	    pum_call_update_screen();
 	else
@@ -6293,19 +6406,16 @@ ins_compl_next(
 	    // inserted.
 	    update_screen(0);
 
-	if (!has_autocomplete_delay)
-	{
-	    // display the updated popup menu
-	    ins_compl_show_pum();
+	// display the updated popup menu
+	ins_compl_show_pum();
 #ifdef FEAT_GUI
-	    if (gui.in_use)
-	    {
-		// Show the cursor after the match, not after the redrawn text.
-		setcursor();
-		out_flush_cursor(FALSE, FALSE);
-	    }
-#endif
+	if (gui.in_use)
+	{
+	    // Show the cursor after the match, not after the redrawn text.
+	    setcursor();
+	    out_flush_cursor(FALSE, FALSE);
 	}
+#endif
 
 	// Delete old text to be replaced, since we're still searching and
 	// don't want to match ourselves!
@@ -6398,9 +6508,10 @@ ins_compl_check_keys(int frequency, int in_compl_func)
 	    c = safe_vgetc();
 	    if (c != K_IGNORE)
 	    {
-		// Don't interrupt completion when the character wasn't typed,
-		// e.g., when doing @q to replay keys.
-		if (c != Ctrl_R && KeyTyped)
+		// Typed keys that get mapped lose KeyTyped. Still let
+		// complete_check() interrupt, except during @r replay.
+		if (c != Ctrl_R && (KeyTyped
+			    || (in_compl_func && reg_executing == 0)))
 		    compl_interrupted = TRUE;
 
 		vungetc(c);
@@ -7288,13 +7399,6 @@ ins_complete(int c, int enable_pum)
     int		save_w_leftcol;
     int		insert_match;
     int		no_matches_found;
-#ifdef ELAPSED_FUNC
-    elapsed_T	compl_start_tv = {0}; // Time when match collection starts
-    int		disable_ac_delay;
-
-    disable_ac_delay = compl_started && ctrl_x_mode_normal()
-	&& (c == Ctrl_N || c == Ctrl_P || c == Ctrl_R || ins_compl_pum_key(c));
-#endif
 
     compl_direction = ins_compl_key2dir(c);
     insert_match = ins_compl_use_match(c);
@@ -7307,10 +7411,6 @@ ins_complete(int c, int enable_pum)
     else if (insert_match && stop_arrow() == FAIL)
 	return FAIL;
 
-#ifdef ELAPSED_FUNC
-    if (compl_autocomplete && p_acl > 0 && !disable_ac_delay)
-	ELAPSED_INIT(compl_start_tv);
-#endif
     compl_curr_win = curwin;
     compl_curr_buf = curwin->w_buffer;
     compl_shown_match = compl_curr_match;
@@ -7366,34 +7466,6 @@ ins_complete(int c, int enable_pum)
     if (!shortmess(SHM_COMPLETIONMENU) && !compl_autocomplete)
 	ins_compl_show_statusmsg();
 
-    // Wait for the autocompletion delay to expire
-#ifdef ELAPSED_FUNC
-    if (compl_autocomplete && p_acl > 0 && !disable_ac_delay
-	    && !no_matches_found && ELAPSED_FUNC(compl_start_tv) < p_acl)
-    {
-	cursor_on();
-	setcursor();
-	out_flush_cursor(FALSE, FALSE);
-	do
-	{
-	    if (char_avail())
-	    {
-		if (ins_compl_preinsert_effect()
-			&& ins_compl_win_active(curwin))
-		{
-		    ins_compl_delete(); // Remove pre-inserted text
-		    compl_ins_end_col = compl_col;
-		}
-		ins_compl_restart();
-		compl_interrupted = TRUE;
-		break;
-	    }
-	    else
-		ui_delay(2L, TRUE);
-	} while (ELAPSED_FUNC(compl_start_tv) < p_acl);
-    }
-#endif
-
     // Show the popup menu, unless we got interrupted.
     if (enable_pum && !compl_interrupted)
 	show_pum(save_w_wrow, save_w_leftcol);
@@ -7413,6 +7485,55 @@ ins_compl_enable_autocomplete(void)
 #ifdef ELAPSED_FUNC
     compl_autocomplete = TRUE;
     compl_get_longest = FALSE;
+#endif
+}
+
+/*
+ * Arm the 'autocompletedelay' timer when the delay is in effect.
+ * Return true when the popup should be deferred, false to trigger it now.
+ */
+    bool
+ins_compl_arm_autocomplete_delay(void)
+{
+#ifdef ELAPSED_FUNC
+    if (p_acl > 0)
+    {
+	ELAPSED_INIT(compl_autocomplete_start_tv);
+	compl_autocomplete_pending = true;
+	return true;
+    }
+#endif
+    return false;
+}
+
+/*
+ * Clear the pending 'autocompletedelay' state.
+ */
+    void
+ins_compl_clear_autocomplete_delay(void)
+{
+    compl_autocomplete_pending = false;
+}
+
+/*
+ * Return true while waiting for 'autocompletedelay' to expire.
+ */
+    bool
+ins_compl_autocomplete_pending(void)
+{
+    return compl_autocomplete_pending;
+}
+
+/*
+ * Return the time in msec since the 'autocompletedelay' was armed.
+ */
+    long
+ins_compl_autocomplete_elapsed(void)
+{
+#ifdef ELAPSED_FUNC
+    return ELAPSED_FUNC(compl_autocomplete_start_tv);
+#else
+    return 0;
 #endif
 }
 

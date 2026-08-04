@@ -3447,6 +3447,7 @@ struct file_buffer
     char_u	*b_p_csl;	// 'completeslash'
 #endif
 #ifdef FEAT_COMPL_FUNC
+    long_u	b_p_cpt_flags;	// flags for 'complete'
     callback_T	*b_p_cpt_cb;	// F{func} in 'complete' callback
     int		b_p_cpt_count;	// Count of values in 'complete'
     char_u	*b_p_cfu;	// 'completefunc'
@@ -4367,6 +4368,10 @@ struct window_S
      * buffer, thus w_wrow is relative to w_winrow.
      */
     int		w_wrow, w_wcol;	    // cursor position in window
+#ifdef FEAT_CONCEAL
+    int		w_wcol_conceal_off; // screen cells concealed before w_wcol on
+				    // the cursor's screen line, set by win_line()
+#endif
 
     /*
      * Info about the lines currently in the window is remembered to avoid
@@ -4729,7 +4734,9 @@ struct VimMenu
 #  if defined(GTK_CHECK_VERSION) && !GTK_CHECK_VERSION(3,4,0)
     GtkWidget	*tearoff_handle;
 #  endif
+#  ifndef USE_GTK4
     GtkWidget   *label;		    // Used by "set wak=" code.
+#  endif
 # endif
 # ifdef FEAT_GUI_MOTIF
     int		sensitive;	    // turn button on/off
@@ -4824,8 +4831,11 @@ typedef struct
     int		do_syntax;
 #endif
     int		user_abort;
+#ifdef FEAT_PRINT_PANGO
+    int		user_abort_msg;
+#endif
     char_u	*jobname;
-#ifdef FEAT_POSTSCRIPT
+#if defined(FEAT_POSTSCRIPT) || defined(FEAT_PRINT_PANGO)
     char_u	*outfile;
     char_u	*arguments;
 #endif
@@ -5351,7 +5361,11 @@ typedef struct {
     char	cts_has_prop_with_text;	// TRUE if a property inserts text
     int		cts_cur_text_width;	// width of current inserted text
     int		cts_prop_lines;		// nr of properties above or below
+    bool	cts_has_below;		// true if a text property below was
+					// counted, its width fills up the line
     int		cts_first_char;		// width text props above the line
+    int		cts_above_width;	// width of text props above the line,
+					// kept for the whole line
     int		cts_with_trailing;	// include size of trailing props with
 					// last character
     int		cts_start_incl;		// prop has true "start_incl" arg

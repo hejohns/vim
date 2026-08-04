@@ -226,6 +226,85 @@ func Test_wildmenu_screendump()
   call StopVimInTerminal(buf)
 endfunc
 
+" When the wildmenu popup menu shrinks, its shadow must be cleared, also on the
+" empty (~) lines above the menu.  See issue #20740.
+func Test_wildmenu_pum_shadow()
+  CheckScreendump
+
+  let lines =<< trim [SCRIPT]
+    func MyCompl(a, l, p)
+      return filter(['axxxxxxxxx', 'ab', 'ac'], 'stridx(v:val, a:a) == 0')
+    endfunc
+    command! -nargs=1 -complete=customlist,MyCompl MyCmd echo <q-args>
+    set wildmode=noselect:lastused,full
+    set wildoptions=pum,fuzzy
+    set pumopt=shadow
+    set shortmess+=I
+    " Give the shadow a distinct color so it is easy to tell apart from the
+    " background in the screen dump.
+    hi Normal ctermbg=grey ctermfg=black guibg=grey guifg=black
+    hi PmenuShadow ctermbg=darkred ctermfg=white guibg=darkred guifg=white
+    autocmd CmdlineChanged : call wildtrigger()
+  [SCRIPT]
+  call writefile(lines, 'XTest_wildshadow', 'D')
+
+  let buf = RunVimInTerminal('-S XTest_wildshadow', {'rows': 12, 'cols': 40})
+
+  " Wide popup with a shadow drawn over the ~ lines.
+  call term_sendkeys(buf, ":MyCmd a")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_wildmenu_pum_shadow_1', {})
+
+  " Narrow the matches: the popup shrinks and the wider shadow must be cleared.
+  call term_sendkeys(buf, "b")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_wildmenu_pum_shadow_2', {})
+
+  call term_sendkeys(buf, "\<Esc>")
+  call StopVimInTerminal(buf)
+endfunc
+
+" Same as above but with a border, and the menu also gets narrower.  When the
+" menu shrinks the stale content of the wider menu must be cleared before the
+" shadow is drawn over it, otherwise the old border and text show through the
+" shadow.  See issue #20740.
+func Test_wildmenu_pum_shadow_border()
+  CheckScreendump
+
+  let lines =<< trim [SCRIPT]
+    func MyCompl(a, l, p)
+      return filter(['aVeryLongItemName', 'ab', 'ac'], 'stridx(v:val, a:a) == 0')
+    endfunc
+    command! -nargs=1 -complete=customlist,MyCompl MyCmd echo <q-args>
+    set wildmode=noselect:lastused,full
+    set wildoptions=pum,fuzzy
+    set pumopt=shadow,border:single
+    set shortmess+=I
+    " Give the shadow a distinct color so it is easy to tell apart from the
+    " background in the screen dump.
+    hi Normal ctermbg=grey ctermfg=black guibg=grey guifg=black
+    hi PmenuShadow ctermbg=darkred ctermfg=white guibg=darkred guifg=white
+    autocmd CmdlineChanged : call wildtrigger()
+  [SCRIPT]
+  call writefile(lines, 'XTest_wildshadowborder', 'D')
+
+  let buf = RunVimInTerminal('-S XTest_wildshadowborder', {'rows': 12, 'cols': 40})
+
+  " Wide popup with a border and a shadow drawn over the ~ lines.
+  call term_sendkeys(buf, ":MyCmd a")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_wildmenu_pum_shadow_border_1', {})
+
+  " Narrow the matches: the popup shrinks in both width and height, the wider
+  " menu's border and text must be cleared next to and under the shadow.
+  call term_sendkeys(buf, "b")
+  call TermWait(buf, 50)
+  call VerifyScreenDump(buf, 'Test_wildmenu_pum_shadow_border_2', {})
+
+  call term_sendkeys(buf, "\<Esc>")
+  call StopVimInTerminal(buf)
+endfunc
+
 func Test_wildmenu_with_input_func()
   CheckScreendump
 
@@ -734,11 +813,13 @@ func Test_getcompletion()
   call assert_equal([], l)
 
   let l = getcompletion('', 'filetypecmd')
-  call assert_equal(["indent", "off", "on", "plugin"], l)
+  call assert_equal(["detect", "indent", "off", "on", "plugin"], l)
   let l = getcompletion('not', 'filetypecmd')
   call assert_equal([], l)
   let l = getcompletion('o', 'filetypecmd')
   call assert_equal(['off', 'on'], l)
+  let l = getcompletion('det', 'filetypecmd')
+  call assert_equal(['detect'], l)
 
   let l = getcompletion('tag', 'function')
   call assert_true(index(l, 'taglist(') >= 0)
@@ -3599,7 +3680,7 @@ endfunc
 func Test_fuzzy_completion_bufname_fullpath()
   CheckUnix
   set wildoptions&
-  call mkdir('Xcmd/Xstate/Xfile.js', 'pR')
+  call mkdir('Xcmd/Xstate', 'pR')
   edit Xcmd/Xstate/Xfile.js
   cd Xcmd/Xstate
   enew
@@ -3635,7 +3716,9 @@ endfunc
 func Test_completion_filetypecmd()
   set wildoptions&
   call feedkeys(":filetype \<C-A>\<C-B>\"\<CR>", 'tx')
-  call assert_equal('"filetype indent off on plugin', @:)
+  call assert_equal('"filetype detect indent off on plugin', @:)
+  call feedkeys(":filetype det\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"filetype detect', @:)
   call feedkeys(":filetype plugin \<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"filetype plugin indent off on', @:)
   call feedkeys(":filetype indent \<C-A>\<C-B>\"\<CR>", 'tx')
@@ -3648,6 +3731,10 @@ func Test_completion_filetypecmd()
   call assert_equal('"filetype off on', @:)
   call feedkeys(":filetype indent of\<C-A>\<C-B>\"\<CR>", 'tx')
   call assert_equal('"filetype indent off', @:)
+  call feedkeys(":filetype plugin\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"filetype plugin', @:)
+  call feedkeys(":filetype plugin indent\<C-A>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"filetype plugin indent', @:)
   set wildoptions&
 endfunc
 
@@ -4604,6 +4691,32 @@ func Test_rulerformat_function()
 
   " clean up
   call StopVimInTerminal(buf)
+endfunc
+
+func s:BumpRulerCounter(timer)
+  let g:ruler_counter = 2
+  redrawstatus
+endfunc
+
+" When the last window has no status line the ruler is drawn in the last
+" screen line.  ":redrawstatus" must update it there as well.
+func Test_rulerformat_redrawstatus()
+  CheckFeature timers
+
+  let save_ruf = &rulerformat
+  set ruler laststatus=0
+  let g:ruler_counter = 1
+  set rulerformat=%20(count:\ %{g:ruler_counter}%)
+  redraw!
+  call assert_match('count: 1', Screenline(&lines))
+
+  " The ruler must be updated without any key being typed.
+  call timer_start(10, function('s:BumpRulerCounter'))
+  call WaitForAssert({-> assert_match('count: 2', Screenline(&lines))})
+
+  let &rulerformat = save_ruf
+  unlet g:ruler_counter
+  set ruler& laststatus&
 endfunc
 
 func Test_getcompletion_usercmd()

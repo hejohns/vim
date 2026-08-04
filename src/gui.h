@@ -28,6 +28,9 @@ typedef GdkEvent GdkEventKey;	// GTK4: GdkEventKey merged into GdkEvent
 # endif
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wstrict-prototypes"
+# if !defined(USE_GTK3) && !defined(USE_GTK4)
+#  pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+# endif
 # include <gtk/gtk.h>
 # pragma GCC diagnostic pop
 #endif
@@ -99,6 +102,15 @@ typedef GdkEvent GdkEventKey;	// GTK4: GdkEventKey merged into GdkEvent
 							+ gui.border_offset)
 # define FILL_Y(row)	((row) * gui.char_height + gui.border_offset)
 # define Y_2_ROW(y)	(((y) - gui.border_offset) / gui.char_height)
+#endif
+#if defined(FEAT_GUI_GTK) && defined(FEAT_IMAGE)
+// Logical pixels to physical pixels
+# define LOG2PHY(l) (gui.in_use ? (double)(l) * gui.scale : (l))
+ // Physical pixels to logical pixels
+# define PHY2LOG(p) (gui.in_use ? (double)(p) / gui.scale : (p))
+#else
+# define LOG2PHY(l) (l)
+# define PHY2LOG(p) (p)
 #endif
 
 // Indices for arrays of scrollbars
@@ -273,6 +285,10 @@ typedef struct Gui
 #ifdef FEAT_DIRECTX
     bool	directx_enabled;    // DirectX (DirectWrite) rendering active
 #endif
+#if defined(FEAT_GUI_GTK) && defined(USE_GTK4)
+    int		bleed_right;	    // Number of pixels to bleed bg color right
+    int		bleed_bot;	    // Number of pixels to bleed bg color down
+#endif
 
 #ifdef FEAT_MENU
 # ifndef FEAT_GUI_GTK
@@ -384,11 +400,9 @@ typedef struct Gui
     GdkColor	*bgcolor;	    // GDK-styled background color
     GdkColor	*spcolor;	    // GDK-styled special color
 # endif
-# if defined(USE_GTK3) || defined(USE_GTK4)
-#  ifndef USE_GTK4_SNAPSHOT
+# if defined(USE_GTK3) && !defined(USE_GTK4)
     cairo_surface_t *surface;       // drawarea surface
-#  endif
-# else
+# elif !defined(USE_GTK4)
     GdkGC	*text_gc;	    // cached GC for normal text
 # endif
     PangoContext     *text_context; // the context used for all text
@@ -405,8 +419,18 @@ typedef struct Gui
     char_u	*browse_fname;	    // file name from filedlg
 
     guint32	event_time;
+# ifdef FEAT_GUI_DIALOG
+    // Multiple dialogs not allowed, just tracked for future use.
+    int		dialogs_active;     // number of active GUI dialogs
+    // Suppress focus-in event when focus returns.
+    int		dialog_focus_pending;
+# endif
+    bool	is_x11;	            // active gdk backend in gtk is x11
 # ifdef GDK_WINDOWING_WAYLAND
     bool	is_wayland;	    // active gdk backend in gtk is wayland
+# endif
+# ifdef FEAT_IMAGE
+    double	scale;		    // Current scaling (may be fractional)
 # endif
 #endif	// FEAT_GUI_GTK
 
@@ -483,6 +507,10 @@ typedef struct Gui
     // Used for clipboard functionality in GTK4 GUI
     GdkContentProvider *regular_provider;
     GdkContentProvider *primary_provider;
+
+# ifdef FEAT_DND
+    GtkDropTargetAsync *drop_target;
+# endif
 #endif
 } gui_T;
 
